@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" fill="none">
+  <rect width="800" height="500" fill="#F4F6F9"/>
+  <rect x="28" y="28" width="744" height="444" rx="16" fill="#FFFFFF" stroke="#E4E8EE" stroke-width="2"/>
+  <rect x="28" y="28" width="744" height="72" rx="16" fill="#00AA5B"/>
+  <rect x="28" y="80" width="744" height="20" fill="#00AA5B"/>
+  <text x="56" y="72" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="22" font-weight="800" fill="#FFFFFF">HOYOVERSE ACCOUNT AUDIT — CLEAN ALL UNSET</text>
+  <rect x="56" y="132" width="688" height="128" rx="12" fill="#ECFDF5" stroke="#A7F3D0" stroke-width="1.5"/>
+  <text x="80" y="172" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="18" font-weight="800" fill="#065F46">ZERO THIRD-PARTY DEADLINKS (PSN / GOOGLE / APPLE CLEAN)</text>
+  <text x="80" y="206" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="14" fill="#047857">Username Hoyoverse: UNSET   |   Birthday In-Game: UNSET   |   Invoice Top-Up: Clean</text>
+  <text x="80" y="236" font-family="JetBrains Mono, monospace" font-size="13" fill="#065F46">INSTANT AES-256 VAULT DELIVERY AFTER PAYMENT</text>
+  <rect x="56" y="284" width="688" height="156" rx="12" fill="#F8FAFC" stroke="#E4E8EE" stroke-width="1.5"/>
+  <text x="80" y="322" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="14" font-weight="700" fill="#111827">Prosedur Serah Terima Aman NexaTrade:</text>
+  <text x="80" y="356" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="14" fill="#4B5563">1. Buka segel brankas AES-256 di halaman detail pesanan Anda.</text>
+  <text x="80" y="386" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="14" fill="#4B5563">2. Login Hoyoverse Account Center dan ganti email ke alamat pribadi Anda.</text>
+  <text x="80" y="416" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="14" fill="#4B5563">3. Konfirmasi pesanan selesai setelah seluruh karakter &amp; weapon terverifikasi.</text>
+</svg>

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" fill="none">
+  <defs>
+    <linearGradient id="sv-bg" x1="0" y1="0" x2="640" y2="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0F2744"/>
+      <stop offset="100%" stop-color="#0055B8"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="400" fill="url(#sv-bg)"/>
+  <rect x="36" y="36" width="568" height="328" rx="16" fill="#FFFFFF" fill-opacity="0.1" stroke="#FFFFFF" stroke-opacity="0.25"/>
+  <text x="64" y="88" fill="#BAE6FD" font-family="ui-monospace, monospace" font-size="13" font-weight="700" letter-spacing="3">OFFICIAL DIGITAL VOUCHER // REGION INDONESIA</text>
+  <text x="64" y="168" fill="#FFFFFF" font-family="system-ui, sans-serif" font-weight="800" font-size="44">STEAM WALLET</text>
+  <text x="64" y="222" fill="#38BDF8" font-family="ui-monospace, monospace" font-weight="800" font-size="38">IDR 120.000</text>
+  <rect x="64" y="270" width="290" height="44" rx="8" fill="#064E3B" stroke="#34D399"/>
+  <text x="84" y="297" fill="#FFFFFF" font-family="ui-monospace, monospace" font-size="13" font-weight="700">AES-256 ENCRYPTED · 0s UNSEAL</text>
+</svg>

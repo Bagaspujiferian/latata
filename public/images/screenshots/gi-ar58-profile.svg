@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" fill="none">
+  <rect width="800" height="500" fill="#F4F6F9"/>
+  <rect x="28" y="28" width="744" height="444" rx="16" fill="#FFFFFF" stroke="#E4E8EE" stroke-width="2"/>
+  <rect x="28" y="28" width="744" height="72" rx="16" fill="#0068E1"/>
+  <rect x="28" y="80" width="744" height="20" fill="#0068E1"/>
+  <text x="56" y="72" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="22" font-weight="800" fill="#FFFFFF">GENSHIN IMPACT ASIA — AR 58 PROFILE OVERVIEW</text>
+  <rect x="56" y="128" width="320" height="150" rx="12" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="1.5"/>
+  <text x="76" y="160" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="13" font-weight="700" fill="#0068E1">ADVENTURE RANK</text>
+  <text x="76" y="208" font-family="JetBrains Mono, monospace" font-size="38" font-weight="800" fill="#111827">AR 58 • WL 8</text>
+  <text x="76" y="244" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="14" fill="#4B5563">Server: Asia • Spiral Abyss 36/36 Stars</text>
+  <rect x="404" y="128" width="340" height="150" rx="12" fill="#ECFDF5" stroke="#A7F3D0" stroke-width="1.5"/>
+  <text x="424" y="160" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="13" font-weight="700" fill="#047857">BIND STATUS</text>
+  <text x="424" y="198" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="18" font-weight="800" fill="#111827">Username &amp; Birthday UNSET</text>
+  <text x="424" y="232" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="14" fill="#047857">No Deadlinks • Ready Bind Buyer Email</text>
+  <rect x="56" y="302" width="688" height="140" rx="12" fill="#F8FAFC" stroke="#E4E8EE" stroke-width="1.5"/>
+  <text x="76" y="336" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="13" font-weight="700" fill="#6B7280">EXPLORATION &amp; RESOURCES</text>
+  <text x="76" y="378" font-family="JetBrains Mono, monospace" font-size="20" font-weight="700" fill="#111827">14x 5-Star Characters  |  6x 5-Star Signature Weapons</text>
+  <text x="76" y="414" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="14" fill="#4B5563">Primogems: 4.820 • Intertwined Fate: 12 • Fragile Resin: 38</text>
+</svg>

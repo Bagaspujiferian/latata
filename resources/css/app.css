@@ -1,0 +1,284 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../views/**/*.blade.php';
+
+@theme {
+    --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+    --color-canvas: #F4F6F9;
+    --color-surface: #FFFFFF;
+    --color-subtle: #F8FAFC;
+    --color-muted-surface: #F1F5F9;
+    --color-border-hairline: #E4E8EE;
+
+    --color-trust-blue: #0068E1;
+    --color-trust-blue-hover: #0055B8;
+    --color-escrow-green: #00AA5B;
+    --color-escrow-green-hover: #00924E;
+    --color-sla-orange: #F05A28;
+    --color-danger-red: #DC2626;
+}
+
+/* ============================================================================
+   1. NATIVE SMOOTH PAGE TRANSITIONS (@view-transition)
+   ============================================================================ */
+@view-transition {
+    navigation: auto;
+}
+
+::view-transition-old(root) {
+    animation: 220ms cubic-bezier(0.22, 1, 0.36, 1) both vtFadeOut;
+}
+
+::view-transition-new(root) {
+    animation: 220ms cubic-bezier(0.22, 1, 0.36, 1) both vtFadeSlideIn;
+}
+
+@keyframes vtFadeOut {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+}
+
+@keyframes vtFadeSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@layer base {
+    html {
+        background-color: #F4F6F9;
+        color: #111827;
+        font-family: var(--font-sans);
+        scroll-behavior: smooth;
+    }
+
+    body {
+        min-height: 100vh;
+        background-color: #F4F6F9;
+        color: #111827;
+    }
+}
+
+/* ============================================================================
+   2. SLIM TRUST-BLUE TOP NAVIGATION PROGRESS BAR
+   ============================================================================ */
+.nav-progress-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2.5px;
+    z-index: 100;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.nav-progress-bar__fill {
+    height: 100%;
+    width: 100%;
+    transform-origin: left center;
+    background: linear-gradient(90deg, #0068E1 0%, #0EA5E9 65%, #00AA5B 100%);
+    transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1), opacity 200ms ease;
+    will-change: transform, opacity;
+}
+
+/* ============================================================================
+   3. TYPOGRAPHY & TABULAR NUMBERS
+   ============================================================================ */
+.tabular-nums-clean {
+    font-variant-numeric: tabular-nums;
+}
+
+.font-mono-tabular {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================================
+   4. LIGHT-MODE MICRO-INTERACTIONS (CRISP, ZERO NEON GLOW)
+   ============================================================================ */
+.btn-tactile {
+    transition:
+        transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+        background-color 150ms ease,
+        border-color 150ms ease,
+        color 150ms ease,
+        box-shadow 150ms ease;
+    will-change: transform;
+}
+
+.btn-tactile:active:not(:disabled) {
+    transform: scale(0.97);
+}
+
+.btn-tactile:focus-visible {
+    outline: 2px solid #0068E1;
+    outline-offset: 2px;
+}
+
+.card-elevate {
+    transition:
+        transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+        box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1),
+        border-color 220ms ease;
+    will-change: transform;
+}
+
+.card-elevate:hover {
+    transform: translateY(-4px);
+    border-color: #CBD5E1;
+    box-shadow: 0 8px 20px -6px rgba(15, 23, 42, 0.08);
+}
+
+.row-interactive {
+    transition: background-color 150ms ease;
+}
+
+.row-interactive:hover {
+    background-color: #F8FAFC;
+}
+
+/* Staggered Entrance Animation */
+.animate-enter {
+    animation: enterFadeUp 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: calc(var(--stagger-index, 0) * 35ms);
+    will-change: transform, opacity;
+}
+
+@keyframes enterFadeUp {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Subtle Ambient Live Pulse Dot */
+.badge-live-pulse {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+.badge-live-pulse::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 9999px;
+    background-color: currentColor;
+    animation: livePulseDot 1.9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    flex-shrink: 0;
+}
+
+@keyframes livePulseDot {
+    0% {
+        opacity: 1;
+        box-shadow: 0 0 0 0 currentColor;
+    }
+    70% {
+        opacity: 0.85;
+        box-shadow: 0 0 0 4px transparent;
+    }
+    100% {
+        opacity: 1;
+        box-shadow: 0 0 0 0 transparent;
+    }
+}
+
+/* ============================================================================
+   5. LIGHT-MODE SHIMMER SKELETON ENGINE
+   ============================================================================ */
+.skeleton-shimmer {
+    position: relative;
+    overflow: hidden;
+    background-color: #E5E9F0;
+    background-image: linear-gradient(
+        90deg,
+        #E5E9F0 0%,
+        #F4F7FA 48%,
+        #E5E9F0 100%
+    );
+    background-size: 200% 100%;
+    background-repeat: no-repeat;
+    animation: shimmerSweep 1.35s ease-in-out infinite;
+    will-change: background-position;
+}
+
+@keyframes shimmerSweep {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* Floating Toast Auto-Dismiss Progress Bar */
+@keyframes toastDrain {
+    from {
+        transform: scaleX(1);
+    }
+    to {
+        transform: scaleX(0);
+    }
+}
+
+.toast-progress-fill {
+    transform-origin: left center;
+    animation: toastDrain var(--toast-duration, 5500ms) linear forwards;
+}
+
+.toast-paused .toast-progress-fill {
+    animation-play-state: paused;
+}
+
+/* Promo Banner Subtle Geometric Grid */
+.promo-banner-grid {
+    background-image:
+        linear-gradient(to right, rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+    background-size: 28px 28px;
+}
+
+/* ============================================================================
+   6. ACCESSIBILITY: REDUCED MOTION FALLBACKS
+   ============================================================================ */
+@media (prefers-reduced-motion: reduce) {
+    ::view-transition-old(root),
+    ::view-transition-new(root),
+    .animate-enter,
+    .badge-live-pulse::before,
+    .skeleton-shimmer,
+    .toast-progress-fill {
+        animation: none !important;
+        transition: none !important;
+    }
+
+    .card-elevate:hover,
+    .btn-tactile:active {
+        transform: none !important;
+    }
+}
+
+[x-cloak] {
+    display: none !important;
+}

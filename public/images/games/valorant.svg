@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" fill="none">
+  <defs>
+    <linearGradient id="val-base" x1="0" y1="0" x2="640" y2="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1E242B"/>
+      <stop offset="55%" stop-color="#35171F"/>
+      <stop offset="100%" stop-color="#7F1D2C"/>
+    </linearGradient>
+    <pattern id="val-grid" width="28" height="28" patternUnits="userSpaceOnUse">
+      <path d="M28 0H0V28" fill="none" stroke="#FFFFFF" stroke-opacity="0.06" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="640" height="400" fill="url(#val-base)"/>
+  <rect width="640" height="400" fill="url(#val-grid)"/>
+  <polygon points="392,0 640,0 640,400 288,400" fill="#EF4444" fill-opacity="0.14"/>
+  <polygon points="484,0 640,0 640,400 412,400" fill="#DC2626" fill-opacity="0.22"/>
+  <path d="M424 128 L490 218 L490 264 L454 264 L388 174 L388 128 Z" fill="#FF4655"/>
+  <path d="M568 128 L568 174 L520 238 L486 238 L534 174 L534 128 Z" fill="#FFFFFF"/>
+  <line x1="42" y1="62" x2="112" y2="62" stroke="#FF4655" stroke-width="3"/>
+  <text x="42" y="96" fill="#FCA5A5" font-family="ui-monospace, monospace" font-size="13" font-weight="700" letter-spacing="3.5">RIOT GAMES // APAC</text>
+  <text x="42" y="198" fill="#FFFFFF" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="54" letter-spacing="2">VALORANT</text>
+  <text x="42" y="242" fill="#FECACA" font-family="ui-monospace, monospace" font-size="13" letter-spacing="2">VP TOP-UP H2H &amp; IMMORTAL ACCOUNTS</text>
+  <rect x="42" y="316" width="188" height="34" rx="8" fill="#FF4655" fill-opacity="0.22" stroke="#FF4655" stroke-opacity="0.7"/>
+  <text x="60" y="338" fill="#FFFFFF" font-family="ui-monospace, monospace" font-size="12" font-weight="700" letter-spacing="1.4">RIOT TAG VERIFIED</text>
+</svg>

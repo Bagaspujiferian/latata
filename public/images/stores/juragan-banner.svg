@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 260" fill="none">
+  <defs>
+    <linearGradient id="jb-bg" x1="0" y1="0" x2="1200" y2="260" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0055B8"/>
+      <stop offset="60%" stop-color="#0068E1"/>
+      <stop offset="100%" stop-color="#0369A1"/>
+    </linearGradient>
+    <pattern id="jb-grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="260" fill="url(#jb-bg)"/>
+  <rect width="1200" height="260" fill="url(#jb-grid)"/>
+  <polygon points="840,0 1200,0 1200,260 720,260" fill="#FFFFFF" fill-opacity="0.08"/>
+  <text x="56" y="84" fill="#BFDBFE" font-family="ui-monospace, monospace" font-size="13" font-weight="700" letter-spacing="3">OFFICIAL VERIFIED MERCHANT // LEVEL 7</text>
+  <text x="56" y="146" fill="#FFFFFF" font-family="system-ui, sans-serif" font-weight="800" font-size="44">Juragan Voucher Official</text>
+  <text x="56" y="186" fill="#E0F2FE" font-family="system-ui, sans-serif" font-size="17">Brankas AES-256 0 Detik &amp; Top Up H2H Otomatis 24/7 — Garansi 10 Menit Kirim</text>
+</svg>

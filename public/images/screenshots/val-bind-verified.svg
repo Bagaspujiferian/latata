@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" fill="none">
+  <rect width="800" height="500" fill="#F4F6F9"/>
+  <rect x="28" y="28" width="744" height="444" rx="16" fill="#FFFFFF" stroke="#E4E8EE" stroke-width="2"/>
+  <rect x="28" y="28" width="744" height="72" rx="16" fill="#00AA5B"/>
+  <rect x="28" y="80" width="744" height="20" fill="#00AA5B"/>
+  <text x="56" y="72" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="22" font-weight="800" fill="#FFFFFF">BIND &amp; SECURITY VERIFICATION — FULL ACCESS READY</text>
+  <rect x="56" y="130" width="688" height="92" rx="12" fill="#ECFDF5" stroke="#A7F3D0" stroke-width="1.5"/>
+  <text x="80" y="166" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="16" font-weight="800" fill="#065F46">EMAIL STATUS: FIRST EMAIL (FE) + RECOVERY DATA INCLUDED</text>
+  <text x="80" y="198" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="14" fill="#047857">Bebas tautan pihak ketiga (Google / Apple / Facebook Unlinked)</text>
+  <rect x="56" y="244" width="332" height="196" rx="12" fill="#F8FAFC" stroke="#E4E8EE" stroke-width="1.5"/>
+  <text x="76" y="278" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="13" font-weight="700" fill="#6B7280">RIOT ACCOUNT CHECKLIST</text>
+  <text x="76" y="316" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="15" font-weight="700" fill="#111827">Email Changeable: YES</text>
+  <text x="76" y="348" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="15" font-weight="700" fill="#111827">2FA Toggle: OFF (Siap Serah Terima)</text>
+  <text x="76" y="380" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="15" font-weight="700" fill="#111827">Voice / Ranked Restriction: NONE</text>
+  <rect x="412" y="244" width="332" height="196" rx="12" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="1.5"/>
+  <text x="432" y="278" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="13" font-weight="700" fill="#0068E1">NEXATRADE ESCROW SHIELD</text>
+  <text x="432" y="318" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="15" font-weight="700" fill="#111827">Garansi 24 Jam Auto-Escrow</text>
+  <text x="432" y="350" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="14" fill="#374151">Dana ditahan aman hingga</text>
+  <text x="432" y="376" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="14" fill="#374151">pembeli selesai verifikasi login.</text>
+</svg>

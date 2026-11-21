@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" fill="none">
+  <defs>
+    <linearGradient id="gi-sky" x1="0" y1="0" x2="640" y2="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0C4A6E"/>
+      <stop offset="52%" stop-color="#0284C7"/>
+      <stop offset="100%" stop-color="#1E3A5F"/>
+    </linearGradient>
+    <linearGradient id="gi-g" x1="430" y1="90" x2="565" y2="300" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FEF3C7"/>
+      <stop offset="55%" stop-color="#F59E0B"/>
+      <stop offset="100%" stop-color="#D97706"/>
+    </linearGradient>
+    <pattern id="gi-grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#FFFFFF" stroke-opacity="0.07" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="640" height="400" fill="url(#gi-sky)"/>
+  <rect width="640" height="400" fill="url(#gi-grid)"/>
+  <polygon points="390,0 640,0 640,400 296,400" fill="#FEF3C7" fill-opacity="0.08"/>
+  <circle cx="496" cy="198" r="92" stroke="#FDE68A" stroke-opacity="0.38" stroke-width="1.5"/>
+  <path d="M496 106 L512 182 L588 198 L512 214 L496 290 L480 214 L404 198 L480 182 Z" fill="url(#gi-g)"/>
+  <circle cx="496" cy="198" r="14" fill="#0C4A6E"/>
+  <line x1="42" y1="62" x2="112" y2="62" stroke="#FDE68A" stroke-width="3"/>
+  <text x="42" y="96" fill="#FEF3C7" font-family="ui-monospace, monospace" font-size="13" font-weight="700" letter-spacing="3.5">HOYOVERSE // TEYVAT</text>
+  <text x="42" y="182" fill="#FFFFFF" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="48" letter-spacing="-1">GENSHIN</text>
+  <text x="42" y="232" fill="#FFFFFF" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="48" letter-spacing="-1">IMPACT</text>
+  <text x="42" y="268" fill="#E0F2FE" font-family="ui-monospace, monospace" font-size="13" letter-spacing="2">GENESIS CRYSTALS &amp; AR 58 VAULT</text>
+  <rect x="42" y="316" width="188" height="34" rx="8" fill="#FFFFFF" fill-opacity="0.14" stroke="#FDE68A" stroke-opacity="0.6"/>
+  <text x="60" y="338" fill="#FFFFFF" font-family="ui-monospace, monospace" font-size="12" font-weight="700" letter-spacing="1.4">ASIA UID VERIFIED</text>
+</svg>
