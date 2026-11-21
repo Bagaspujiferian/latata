@@ -133,7 +133,7 @@ Fase 4 menyempurnakan **NexaTrade Enterprise Engine (`latata`)** pada **Laravel 
 ---
 
 ## 6. Checklist Progres Eksekusi
-- [ ] Checkpoint 1: Install `barryvdh/laravel-dompdf`, buat 4 migrasi baru + migrasi aditif (perluasan ENUM aman) + model Eloquent, dan verifikasi migrasi di MySQL InnoDB.
-- [ ] Checkpoint 2: Implementasikan `WalletPinService`, `H2HReconciliationService`, `SellerDebtRecoveryService`, `AdCreditAndStoreLevelService`, `FinanceAndLedgerAuditService`, `DocumentExportService`, Rate Limiters, Nickname Cache, serta Artisan commands (`nexatrade:reconcile-h2h`, `nexatrade:audit-ledger`).
-- [ ] Checkpoint 3: Bangun Auth produksi (`/login`, `/register`, `/account/security`), pagar Demo Switcher, Seller Ad Credits & Debt Repayment UI, tombol PDF/CSV, Admin Finance P&L Dashboard (`/admin/finance`), dan perbarui `DatabaseSeeder.php` + `npm run build`.
-- [ ] Checkpoint 4: Tulis `tests/Feature/Fase4HardeningAndFinanceTest.php`, centang checklist di `docs/prd-fase-4-hardening.md`, dan pastikan SELURUH test (Fase 0, 1, 2, 3, dan 4) lulus 100% di `db_latata_test` serta `php artisan nexatrade:audit-ledger` melaporkan `BALANCED`.
+- [x] Checkpoint 1: Install `barryvdh/laravel-dompdf`, buat 4 migrasi baru + migrasi aditif (perluasan ENUM aman) + model Eloquent, dan verifikasi migrasi di MySQL InnoDB.
+- [x] Checkpoint 2: Implementasikan `WalletPinService`, `H2HReconciliationService`, `SellerDebtRecoveryService`, `AdCreditAndStoreLevelService`, `FinanceAndLedgerAuditService`, `DocumentExportService`, Rate Limiters, Nickname Cache, serta Artisan commands (`nexatrade:reconcile-h2h`, `nexatrade:audit-ledger`).
+- [x] Checkpoint 3: Bangun Auth produksi (`/login`, `/register`, `/account/security`), pagar Demo Switcher, Seller Ad Credits & Debt Repayment UI, tombol PDF/CSV, Admin Finance P&L Dashboard (`/admin/finance`), dan perbarui `DatabaseSeeder.php` + `npm run build`.
+- [x] Checkpoint 4: Tulis `tests/Feature/Fase4HardeningAndFinanceTest.php`, centang checklist di `docs/prd-fase-4-hardening.md`, dan pastikan SELURUH test (Fase 0, 1, 2, 3, dan 4) lulus 100% di `db_latata_test` serta `php artisan nexatrade:audit-ledger` melaporkan `BALANCED`.

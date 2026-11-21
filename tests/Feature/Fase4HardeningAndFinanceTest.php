@@ -417,7 +417,8 @@ class Fase4HardeningAndFinanceTest extends TestCase
         $this->actingAs($admin)->post(route('admin.finance.audit-ledger'))->assertRedirect();
         $this->actingAs($admin)->post(route('admin.finance.reconcile-h2h'))->assertRedirect();
 
-        // 3. Smoke check all other Phase 4 Light Mode pages
+        // 3. Smoke check all other Phase 4 Light Mode pages (guest auth views + authenticated pages)
+        auth()->logout();
         $this->get(route('login'))->assertOk()->assertSee('Masuk ke Akun NexaTrade');
         $this->get(route('register'))->assertOk()->assertSee('Buat Akun NexaTrade');
         $this->actingAs($buyer1)->get(route('account.security'))->assertOk()->assertSee('PIN Dompet 6-Digit');

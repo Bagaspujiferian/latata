@@ -74,7 +74,7 @@ class AdminFinanceController extends Controller
                 'status' => $snapshot->status,
                 'discrepancy_amount' => (string) $snapshot->discrepancy_amount,
             ],
-            summary: "Audit Ledger Global {$snapshot->audit_code}: {$snapshot->status}",
+            notes: "Audit Ledger Global {$snapshot->audit_code}: {$snapshot->status}",
         );
 
         if ($request->wantsJson()) {
@@ -101,7 +101,7 @@ class AdminFinanceController extends Controller
             entityId: null,
             before: null,
             after: $report,
-            summary: "Rekonsiliasi H2H manual: checked={$report['checked']}, delivered={$report['delivered']}, refunded={$report['refunded']}",
+            notes: "Rekonsiliasi H2H manual: checked={$report['checked']}, delivered={$report['delivered']}, refunded={$report['refunded']}",
         );
 
         if ($request->wantsJson()) {
