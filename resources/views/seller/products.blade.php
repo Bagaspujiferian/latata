@@ -75,6 +75,11 @@
                                         <span class="px-2 py-0.5 rounded-full text-[10px] font-bold {{ $isVault ? 'bg-[#ECFDF5] text-[#047857]' : ($product->gameCategory->delivery_method === 'api_h2h' ? 'bg-[#EFF6FF] text-[#0068E1]' : 'bg-[#F1F5F9] text-[#4B5563]') }}">
                                             {{ strtoupper($product->gameCategory->delivery_method) }}
                                         </span>
+                                        @if($product->is_featured)
+                                            <span class="px-2 py-0.5 rounded-full bg-[#FFF4ED] border border-[#FED7AA] text-[#C2410C] text-[10px] font-bold font-mono-tabular">
+                                                {{ $product->featured_until ? 'Featured hingga '.$product->featured_until->format('d M Y') : 'FEATURED' }}
+                                            </span>
+                                        @endif
                                         <span class="text-[#6B7280]">{{ $product->gameCategory->game->name }} &middot; {{ $product->gameCategory->name }}</span>
                                     </div>
 

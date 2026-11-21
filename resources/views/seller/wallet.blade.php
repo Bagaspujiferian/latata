@@ -39,8 +39,10 @@
 
                     @if($clawbackDebt > 0)
                         <div class="pt-3 border-t border-[#FECACA] grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <form method="POST" action="{{ route('seller.wallet.repay-debt') }}" class="p-3.5 rounded-xl bg-white border border-[#FECACA] space-y-2.5">
+                            <form method="POST" action="{{ route('seller.wallet.repay-debt') }}" x-data="{ submittingDebt: false }" @submit="submittingDebt = true"
+                                  class="p-3.5 rounded-xl bg-white border border-[#FECACA] space-y-2.5">
                                 @csrf
+                                <input type="hidden" name="_idempotency_key" value="{{ (string) \Illuminate\Support\Str::uuid() }}">
                                 <div class="font-bold text-[#111827]">Lunasi Tunggakan via Saldo Aktif</div>
                                 <input type="number" name="amount" value="{{ (float) min($clawbackDebt, max(1000, (float) ($user->wallet?->available_balance ?? 0))) }}" min="1000" max="{{ $clawbackDebt }}" step="1000" required
                                        class="w-full h-9 px-3 font-mono-tabular bg-[#F8FAFC] border border-[#D1D5DB] rounded-lg text-[#111827]">
@@ -48,8 +50,8 @@
                                     <input type="password" name="wallet_pin" required inputmode="numeric" maxlength="6" placeholder="PIN Dompet 6-Digit"
                                            class="w-full h-9 px-3 font-mono-tabular text-center tracking-[0.2em] bg-[#F8FAFC] border border-[#0068E1] rounded-lg text-[#111827]">
                                 @endif
-                                <button type="submit" class="btn-tactile w-full py-2 rounded-lg bg-[#0068E1] hover:bg-[#0055B8] text-white font-bold cursor-pointer">
-                                    Bayar dari Saldo Aktif
+                                <button type="submit" :disabled="submittingDebt" class="btn-tactile w-full py-2 rounded-lg bg-[#0068E1] hover:bg-[#0055B8] text-white font-bold cursor-pointer disabled:opacity-65">
+                                    <span x-text="submittingDebt ? 'Memproses Pelunasan...' : 'Bayar dari Saldo Aktif'"></span>
                                 </button>
                             </form>
 
@@ -114,6 +116,13 @@
                           @submit="submittingWd = true"
                           class="bg-white border border-[#E4E8EE] rounded-xl p-5 space-y-3.5 text-xs">
                         @csrf
+                        <input type="hidden" name="_idempotency_key" value="{{ (string) \Illuminate\Support\Str::uuid() }}">
+                        @if((float) ($user->wallet?->non_withdrawable_portion ?? 0) > 0)
+                            <div class="p-2.5 rounded-lg bg-[#FFF4ED] border border-[#FED7AA] text-[#9A3412] text-[11px]">
+                                <strong>Anti-Gestun:</strong> Rp {{ number_format((float) $user->wallet->non_withdrawable_portion, 0, ',', '.') }} berasal dari Top-Up (khusus belanja). Maksimal penarikan saat ini:
+                                <strong class="font-mono-tabular">Rp {{ number_format($user->wallet->withdrawableBalance(), 0, ',', '.') }}</strong>.
+                            </div>
+                        @endif
                         <div class="flex items-center justify-between gap-2 pb-2 border-b border-[#F1F5F9]">
                             <h2 class="text-sm font-bold text-[#111827]">Ajukan Penarikan ke Rekening</h2>
                             <a href="{{ route('seller.bank-accounts') }}" class="text-[11px] font-bold text-[#0068E1] hover:underline">

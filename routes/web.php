@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AccountRecoveryController;
 use App\Http\Controllers\AdminChaosLabController;
 use App\Http\Controllers\AdminCmsController;
 use App\Http\Controllers\AdminFinanceController;
@@ -21,6 +22,7 @@ use App\Http\Controllers\SellerKycController;
 use App\Http\Controllers\SellerProductController;
 use App\Http\Controllers\SellerPromoController;
 use App\Http\Controllers\StorefrontController;
+use App\Http\Controllers\WalletTopUpController;
 use App\Http\Controllers\WarrantyController;
 use App\Http\Controllers\WishlistController;
 use Illuminate\Support\Facades\Route;
@@ -31,12 +33,21 @@ Route::get('/p/{slug}', [MarketplaceController::class, 'show'])->name('marketpla
 Route::get('/stores/{slug}', [StorefrontController::class, 'show'])->name('stores.show');
 Route::get('/toko/{slug}', [StorefrontController::class, 'show'])->name('stores.toko');
 
-// Production Authentication (Login, Register, Logout)
+// Production Authentication (Login, Register, Logout & Self-Service Password Recovery)
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:auth-login')->name('login.submit');
 Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
 Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:auth-login')->name('register.submit');
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->name('logout');
+
+Route::get('/forgot-password', [AccountRecoveryController::class, 'showForgotPassword'])->name('password.request');
+Route::post('/forgot-password', [AccountRecoveryController::class, 'sendPasswordReset'])
+    ->middleware('throttle:auth-recovery')
+    ->name('password.email');
+Route::get('/reset-password/{token}', [AccountRecoveryController::class, 'showResetPassword'])->name('password.reset');
+Route::post('/reset-password', [AccountRecoveryController::class, 'resetPassword'])
+    ->middleware('throttle:auth-recovery')
+    ->name('password.update');
 
 // 1-Click Demo Account Switcher & Demo Wallet Top-Up (Guarded by config('nexatrade.demo_switcher_enabled'))
 Route::post('/demo/switch-user', [DemoAuthController::class, 'switchUser'])->name('demo.switch-user');
@@ -44,12 +55,18 @@ Route::post('/demo/wallet-topup', [DemoAuthController::class, 'demoTopup'])->mid
 
 // Authenticated Buyer, Security/PIN, Inbox Chat, Notifications, Bank Accounts, KYC, Wishlist, Exports & Checkout
 Route::middleware(['auth'])->group(function (): void {
-    // Account Security & 6-Digit Wallet PIN
+    // Account Security & 6-Digit Wallet PIN + Self-Service PIN Recovery
     Route::get('/account/security', [AuthController::class, 'security'])->name('account.security');
     Route::post('/account/security/password', [AuthController::class, 'updatePassword'])->name('account.security.password');
     Route::post('/account/security/pin', [AuthController::class, 'updateWalletPin'])
         ->middleware('throttle:wallet-sensitive')
         ->name('account.security.pin');
+    Route::post('/account/security/pin-reset/request', [AccountRecoveryController::class, 'requestPinReset'])
+        ->middleware('throttle:pin-recovery')
+        ->name('account.security.pin-reset.request');
+    Route::post('/account/security/pin-reset/confirm', [AccountRecoveryController::class, 'confirmPinReset'])
+        ->middleware('throttle:pin-recovery')
+        ->name('account.security.pin-reset.confirm');
 
     // Pre-Transaction Inbox Chat
     Route::get('/inbox', [InboxController::class, 'index'])->name('inbox.index');
@@ -92,7 +109,9 @@ Route::middleware(['auth'])->group(function (): void {
     Route::post('/checkout/voucher-preview', [CheckoutController::class, 'previewVoucher'])
         ->middleware('throttle:voucher-preview')
         ->name('checkout.voucher-preview');
-    Route::post('/checkout', [CheckoutController::class, 'processCheckout'])->name('checkout.process');
+    Route::post('/checkout', [CheckoutController::class, 'processCheckout'])
+        ->middleware('idempotent')
+        ->name('checkout.process');
 
     Route::get('/invoices/{invoice_code}', [CheckoutController::class, 'showInvoice'])->name('invoices.show');
     Route::get('/invoices/{invoice_code}/pdf', [ExportController::class, 'invoicePdf'])->name('invoices.pdf');
@@ -117,6 +136,13 @@ Route::middleware(['auth'])->group(function (): void {
         ->middleware('throttle:chat-send')
         ->name('buyer.orders.messages');
     Route::get('/buyer/wallet', [BuyerOrderController::class, 'wallet'])->name('buyer.wallet');
+    Route::post('/buyer/wallet/topup', [WalletTopUpController::class, 'store'])
+        ->middleware(['idempotent', 'throttle:wallet-sensitive'])
+        ->name('buyer.wallet.topup');
+    Route::get('/buyer/wallet/topup/{topup_code}', [WalletTopUpController::class, 'show'])
+        ->name('buyer.wallet.topup.show');
+    Route::post('/buyer/wallet/topup/{topup_code}/simulate-pay', [WalletTopUpController::class, 'simulatePay'])
+        ->name('buyer.wallet.topup.simulate-pay');
 });
 
 // Seller Center / TokoKu Studio
@@ -149,16 +175,16 @@ Route::prefix('seller')->name('seller.')->middleware(['auth', 'role:seller'])->g
         ->middleware('throttle:chat-send')
         ->name('orders.messages');
 
-    // Wallet, Withdrawals (PIN + Throttle), Security Deposit & Clawback Debt Repayment
+    // Wallet, Withdrawals (PIN + Idempotency + Throttle), Security Deposit & Clawback Debt Repayment
     Route::get('/wallet', [SellerDashboardController::class, 'wallet'])->name('wallet');
     Route::post('/wallet/withdraw', [SellerDashboardController::class, 'requestWithdrawal'])
-        ->middleware('throttle:wallet-sensitive')
+        ->middleware(['idempotent', 'throttle:wallet-sensitive'])
         ->name('wallet.withdraw');
     Route::post('/wallet/lock-deposit', [SellerPromoController::class, 'lockDeposit'])
         ->middleware('throttle:wallet-sensitive')
         ->name('wallet.lock-deposit');
     Route::post('/wallet/repay-debt', [SellerDebtController::class, 'repayFromBalance'])
-        ->middleware('throttle:wallet-sensitive')
+        ->middleware(['idempotent', 'throttle:wallet-sensitive'])
         ->name('wallet.repay-debt');
     Route::post('/wallet/repay-debt-gateway', [SellerDebtController::class, 'repayViaGateway'])
         ->middleware('throttle:wallet-sensitive')
@@ -168,7 +194,7 @@ Route::prefix('seller')->name('seller.')->middleware(['auth', 'role:seller'])->g
     // Seller Ad Credits, Store Level & CSV Exports
     Route::get('/ad-credits', [SellerAdCreditController::class, 'index'])->name('ad-credits');
     Route::post('/ad-credits/purchase', [SellerAdCreditController::class, 'purchase'])
-        ->middleware('throttle:wallet-sensitive')
+        ->middleware(['idempotent', 'throttle:wallet-sensitive'])
         ->name('ad-credits.purchase');
     Route::post('/ad-credits/boost/{product}', [SellerAdCreditController::class, 'boostFeatured'])
         ->name('ad-credits.boost');

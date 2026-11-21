@@ -11,6 +11,7 @@ use App\Models\GameCategory;
 use App\Models\OrderReview;
 use App\Models\Product;
 use App\Models\ProductAttributeValue;
+use App\Models\ProductBoost;
 use App\Models\ProductImage;
 use App\Models\SellerKycVerification;
 use App\Models\SellerProfile;
@@ -31,6 +32,7 @@ use App\Services\NotificationService;
 use App\Services\OrderStateAndSlaService;
 use App\Services\SellerKycService;
 use App\Services\VaultEncryptionService;
+use App\Services\WalletTopUpService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -1255,6 +1257,36 @@ class DatabaseSeeder extends Seeder
         // Neutralized funding + real double-entry purchase so Seller 1 available_balance stays exact & ledger stays BALANCED!
         $ledgerService->adminDemoTopup($seller1->id, 15000.00, 'SEED-ADCRED-FUND-S1', 'Alokasi dana awal pembelian paket kredit promosi');
         $adCreditService->purchasePackageWithWallet($seller1->id, $pkgStarter->id);
+
+        // =====================================================================
+        // (O) PHASE 5: TIME-BOXED AD BOOST & ANTI-GESTUN WALLET TOP-UPS
+        //     (Zero regression on Buyer 1's exact balance; audit-ledger BALANCED!)
+        // =====================================================================
+        $walletTopUpService = app(WalletTopUpService::class);
+
+        // 1. Seed 1 active Time-Boxed Featured Boost (+7 days) on Seller 1's Steam 120K product
+        $boostStarts = now();
+        $boostEnds = now()->addDays(7);
+        ProductBoost::create([
+            'product_id' => $pSteam120->id,
+            'seller_id' => $seller1->id,
+            'boost_type' => 'featured',
+            'credits_spent' => 3,
+            'starts_at' => $boostStarts,
+            'ends_at' => $boostEnds,
+            'status' => 'active',
+        ]);
+        $pSteam120->update([
+            'is_featured' => true,
+            'featured_until' => $boostEnds,
+        ]);
+
+        // 2. Seed 1 PAID Wallet Top-Up (Rp 50.000) for Buyer 2 via WalletTopUpService (double-entry BALANCED)
+        //    + 1 UNPAID Wallet Top-Up (Rp 100.000) for Buyer 1 (leaves Buyer 1 exact balance untouched!)
+        $buyer2TopUp = $walletTopUpService->createTopUp($buyer2->id, 50000.00, 'qris');
+        $walletTopUpService->settleTopUp($buyer2TopUp->topup_code, 'SEED-TOPUP-B2-001');
+
+        $walletTopUpService->createTopUp($buyer1->id, 100000.00, 'qris');
 
         // Generate initial global ledger reconciliation snapshot (must be BALANCED with Rp 0 discrepancy!)
         $financeAuditService->runGlobalLedgerAudit('seeder');

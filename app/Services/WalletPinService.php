@@ -32,7 +32,7 @@ class WalletPinService
         '012345',
     ];
 
-    public function setPin(int $userId, string $pin, ?string $currentPassword = null): void
+    public function assertStrongPin(string $pin): void
     {
         $cleanPin = trim($pin);
         if (! preg_match('/^\d{6}$/', $cleanPin)) {
@@ -42,6 +42,12 @@ class WalletPinService
         if (in_array($cleanPin, self::WEAK_PINS, true)) {
             throw new DomainException('PIN terlalu lemah dan mudah ditebak (hindari 000000, 111111, atau 123456).');
         }
+    }
+
+    public function setPin(int $userId, string $pin, ?string $currentPassword = null): void
+    {
+        $cleanPin = trim($pin);
+        $this->assertStrongPin($cleanPin);
 
         DB::transaction(function () use ($userId, $cleanPin, $currentPassword): void {
             $user = DB::table('users')

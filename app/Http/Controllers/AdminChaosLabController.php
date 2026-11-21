@@ -51,21 +51,27 @@ class AdminChaosLabController extends Controller
     {
         $order = Order::where('order_code', $orderCode)->firstOrFail();
         $validated = $request->validate([
-            'verdict' => ['required', 'in:RELEASE_TO_SELLER,REFUND_TO_BUYER'],
+            'verdict' => ['required', 'in:RELEASE_TO_SELLER,REFUND_TO_BUYER,SPLIT_SETTLEMENT'],
             'admin_notes' => ['required', 'string', 'min:5', 'max:500'],
+            'buyer_refund_percent' => ['required_if:verdict,SPLIT_SETTLEMENT', 'nullable', 'integer', 'min:1', 'max:99'],
         ]);
 
         try {
+            $buyerPct = isset($validated['buyer_refund_percent']) ? (int) $validated['buyer_refund_percent'] : null;
+
             $this->orderStateService->adminResolveDispute(
                 orderId: $order->id,
                 adminId: $request->user()->id,
                 verdict: $validated['verdict'],
                 adminNotes: $validated['admin_notes'],
+                buyerRefundPercent: $buyerPct,
             );
 
-            $label = $validated['verdict'] === 'RELEASE_TO_SELLER'
-                ? 'Menangkan Penjual (ESCROW_RELEASE)'
-                : 'Menangkan Pembeli (ESCROW_REFUND_DEBIT + BUYER_REFUND_CREDIT)';
+            $label = match ($validated['verdict']) {
+                'RELEASE_TO_SELLER' => 'Menangkan Penjual (ESCROW_RELEASE)',
+                'SPLIT_SETTLEMENT' => "Split Settlement ({$buyerPct}% Pembeli / ".(100 - (int) $buyerPct).'% Penjual)',
+                default => 'Menangkan Pembeli (ESCROW_REFUND_DEBIT + BUYER_REFUND_CREDIT)',
+            };
 
             return back()->with('success', "Putusan Sengketa {$order->order_code} dieksekusi: {$label}.");
         } catch (DomainException $e) {

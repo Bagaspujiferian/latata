@@ -30,6 +30,7 @@ class Product extends Model
         'sold_count',
         'rating_avg',
         'is_featured',
+        'featured_until',
         'last_bumped_at',
         'is_active',
     ];
@@ -46,10 +47,16 @@ class Product extends Model
             'sold_count' => 'integer',
             'rating_avg' => 'decimal:2',
             'is_featured' => 'boolean',
+            'featured_until' => 'datetime',
             'last_bumped_at' => 'datetime',
             'is_active' => 'boolean',
             'deleted_at' => 'datetime',
         ];
+    }
+
+    public function boosts(): HasMany
+    {
+        return $this->hasMany(ProductBoost::class)->orderByDesc('id');
     }
 
     public function seller(): BelongsTo

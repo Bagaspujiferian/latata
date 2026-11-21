@@ -149,5 +149,17 @@ class AppServiceProvider extends ServiceProvider
 
             return Limit::perMinute(40)->by($key);
         });
+
+        RateLimiter::for('auth-recovery', function (Request $request): Limit {
+            $email = strtolower(trim((string) $request->input('email', 'guest')));
+
+            return Limit::perMinutes(15, 5)->by($email.'|'.$request->ip());
+        });
+
+        RateLimiter::for('pin-recovery', function (Request $request): Limit {
+            $key = $request->user()?->id ? 'u:'.$request->user()->id : 'ip:'.$request->ip();
+
+            return Limit::perMinutes(15, 3)->by($key);
+        });
     }
 }

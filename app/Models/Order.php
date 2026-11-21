@@ -34,6 +34,9 @@ class Order extends Model
         'auto_complete_at',
         'completed_at',
         'cancelled_reason',
+        'dispute_buyer_refund_percent',
+        'dispute_buyer_refund_amount',
+        'dispute_seller_release_amount',
     ];
 
     /** @return array<string, string> */
@@ -46,6 +49,9 @@ class Order extends Model
             'buyer_payable_amount' => 'decimal:2',
             'platform_commission' => 'decimal:2',
             'seller_escrow_amount' => 'decimal:2',
+            'dispute_buyer_refund_percent' => 'integer',
+            'dispute_buyer_refund_amount' => 'decimal:2',
+            'dispute_seller_release_amount' => 'decimal:2',
             'buyer_game_inputs' => 'array',
             'seller_delivery_proof' => 'array',
             'h2h_response_log' => 'array',

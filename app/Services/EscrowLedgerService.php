@@ -129,13 +129,17 @@ class EscrowLedgerService
         bool $isHybrid,
     ): WalletMutation {
         return DB::transaction(function () use ($buyerId, $invoiceId, $amount, $invoiceCode, $isHybrid): WalletMutation {
+            $this->lockWalletsAscending([$buyerId]);
+
             $mutationType = $isHybrid ? 'HYBRID_WALLET_HOLD' : 'PAY_ORDER_FULL_WALLET';
             $referenceCode = $isHybrid ? "HYB-HOLD-{$invoiceCode}" : "PAY-WALLET-{$invoiceCode}";
             $description = $isHybrid
                 ? "Penahanan saldo hibrida untuk tagihan {$invoiceCode}"
                 : "Pembayaran penuh via saldo dompet untuk tagihan {$invoiceCode}";
 
-            return $this->mutateLockedWallet(
+            $wasExisting = WalletMutation::where('reference_code', $referenceCode)->exists();
+
+            $mutation = $this->mutateLockedWallet(
                 userId: $buyerId,
                 bucket: 'available',
                 direction: 'DEBIT',
@@ -145,7 +149,182 @@ class EscrowLedgerService
                 description: $description,
                 orderId: null,
                 paymentInvoiceId: $invoiceId,
+                alreadyLocked: true,
             );
+
+            // Anti-Gestun Erosion Law: wallet shopping spends non-withdrawable Top-Up funds first.
+            if (! $wasExisting) {
+                $walletRow = DB::table('wallets')->where('user_id', $buyerId)->first();
+                $currentNonWithdrawableCents = max(0, $this->toCents((float) ($walletRow->non_withdrawable_portion ?? 0)));
+                if ($currentNonWithdrawableCents > 0) {
+                    $newNonWithdrawableCents = max(0, $currentNonWithdrawableCents - $this->toCents($amount));
+                    DB::table('wallets')
+                        ->where('user_id', $buyerId)
+                        ->update([
+                            'non_withdrawable_portion' => $this->fromCents($newNonWithdrawableCents),
+                            'updated_at' => now(),
+                        ]);
+                }
+            }
+
+            return $mutation;
+        });
+    }
+
+    /**
+     * Credit buyer wallet via official Top-Up channel and lock credited amount as non-withdrawable (Anti-Gestun).
+     */
+    public function creditWalletTopUp(int $userId, float $amount, string $topupCode): WalletMutation
+    {
+        return DB::transaction(function () use ($userId, $amount, $topupCode): WalletMutation {
+            $this->lockWalletsAscending([$userId]);
+
+            $referenceCode = "TOPUP-{$topupCode}";
+            $wasExisting = WalletMutation::where('reference_code', $referenceCode)->exists();
+
+            $mutation = $this->mutateLockedWallet(
+                userId: $userId,
+                bucket: 'available',
+                direction: 'CREDIT',
+                amount: $amount,
+                mutationType: 'WALLET_TOPUP',
+                referenceCode: $referenceCode,
+                description: "Top-Up saldo dompet {$topupCode} (khusus belanja / Anti-Gestun)",
+                orderId: null,
+                paymentInvoiceId: null,
+                alreadyLocked: true,
+            );
+
+            if (! $wasExisting) {
+                $walletRow = DB::table('wallets')->where('user_id', $userId)->first();
+                $currentNonWithdrawableCents = max(0, $this->toCents((float) ($walletRow->non_withdrawable_portion ?? 0)));
+                $newNonWithdrawableCents = $currentNonWithdrawableCents + $this->toCents($amount);
+
+                DB::table('wallets')
+                    ->where('user_id', $userId)
+                    ->update([
+                        'non_withdrawable_portion' => $this->fromCents($newNonWithdrawableCents),
+                        'updated_at' => now(),
+                    ]);
+            }
+
+            return $mutation;
+        });
+    }
+
+    /**
+     * Execute Partial Dispute Split Settlement across Seller Pending, Seller Available, and Buyer Available.
+     * Guarantees seller pending drops by 100% of seller_escrow_amount and buyer refund stays withdrawable.
+     *
+     * @return array{
+     *   seller_release_debit: ?WalletMutation,
+     *   seller_release_credit: ?WalletMutation,
+     *   seller_clawback_debit: ?WalletMutation,
+     *   buyer_refund_credit: ?WalletMutation
+     * }
+     */
+    public function executeDisputeSplitSettlement(
+        int $sellerId,
+        int $buyerId,
+        int $orderId,
+        float $sellerEscrowAmount,
+        float $sellerReleaseAmount,
+        float $buyerRefundAmount,
+        string $orderCode,
+        string $reason,
+    ): array {
+        $escrowCents = $this->toCents($sellerEscrowAmount);
+        $releaseCents = $this->toCents($sellerReleaseAmount);
+        $buyerRefundCents = $this->toCents($buyerRefundAmount);
+        $clawbackCents = $escrowCents - $releaseCents;
+
+        if ($escrowCents <= 0 || $releaseCents < 0 || $clawbackCents < 0 || $buyerRefundCents < 0) {
+            throw new FinancialInvariantException('Nominal Split Settlement tidak valid terhadap escrow pesanan.');
+        }
+
+        return DB::transaction(function () use (
+            $sellerId,
+            $buyerId,
+            $orderId,
+            $releaseCents,
+            $clawbackCents,
+            $buyerRefundCents,
+            $orderCode,
+            $reason,
+        ): array {
+            $this->lockWalletsAscending([$sellerId, $buyerId]);
+
+            $sellerReleaseDebit = null;
+            $sellerReleaseCredit = null;
+            $sellerClawbackDebit = null;
+            $buyerRefundCredit = null;
+
+            if ($releaseCents > 0) {
+                $releaseDecimal = $releaseCents / 100;
+                $sellerReleaseDebit = $this->mutateLockedWallet(
+                    userId: $sellerId,
+                    bucket: 'pending',
+                    direction: 'DEBIT',
+                    amount: $releaseDecimal,
+                    mutationType: 'DISPUTE_PARTIAL_RELEASE',
+                    referenceCode: "SPLIT-REL-D-{$orderCode}",
+                    description: "Split Settlement: pelepasan porsi escrow penjual {$orderCode} ({$reason})",
+                    orderId: $orderId,
+                    paymentInvoiceId: null,
+                    alreadyLocked: true,
+                );
+
+                $sellerReleaseCredit = $this->mutateLockedWallet(
+                    userId: $sellerId,
+                    bucket: 'available',
+                    direction: 'CREDIT',
+                    amount: $releaseDecimal,
+                    mutationType: 'DISPUTE_PARTIAL_RELEASE',
+                    referenceCode: "SPLIT-REL-C-{$orderCode}",
+                    description: "Split Settlement: pencairan porsi penjual {$orderCode} ke saldo aktif",
+                    orderId: $orderId,
+                    paymentInvoiceId: null,
+                    alreadyLocked: true,
+                );
+            }
+
+            if ($clawbackCents > 0) {
+                $sellerClawbackDebit = $this->mutateLockedWallet(
+                    userId: $sellerId,
+                    bucket: 'pending',
+                    direction: 'DEBIT',
+                    amount: $clawbackCents / 100,
+                    mutationType: 'DISPUTE_PARTIAL_REFUND',
+                    referenceCode: "SPLIT-CLAW-{$orderCode}",
+                    description: "Split Settlement: penarikan sisa escrow porsi refund {$orderCode}",
+                    orderId: $orderId,
+                    paymentInvoiceId: null,
+                    alreadyLocked: true,
+                );
+            }
+
+            if ($buyerRefundCents > 0) {
+                // Refund credit goes directly into buyer available_balance WITHOUT touching non_withdrawable_portion.
+                $buyerRefundCredit = $this->mutateLockedWallet(
+                    userId: $buyerId,
+                    bucket: 'available',
+                    direction: 'CREDIT',
+                    amount: $buyerRefundCents / 100,
+                    mutationType: 'DISPUTE_PARTIAL_REFUND',
+                    referenceCode: "SPLIT-BUY-{$orderCode}",
+                    description: "Split Settlement: refund parsial pesanan {$orderCode} ({$reason})",
+                    orderId: $orderId,
+                    paymentInvoiceId: null,
+                    alreadyLocked: true,
+                );
+            }
+
+            return [
+                'seller_release_debit' => $sellerReleaseDebit,
+                'seller_release_credit' => $sellerReleaseCredit,
+                'seller_clawback_debit' => $sellerClawbackDebit,
+                'buyer_refund_credit' => $buyerRefundCredit,
+            ];
         });
     }
 

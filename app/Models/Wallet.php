@@ -21,6 +21,7 @@ class Wallet extends Model
         'user_id',
         'pending_balance',
         'available_balance',
+        'non_withdrawable_portion',
         'security_deposit_balance',
         'clawback_debt_balance',
         'updated_at',
@@ -32,10 +33,16 @@ class Wallet extends Model
         return [
             'pending_balance' => 'decimal:2',
             'available_balance' => 'decimal:2',
+            'non_withdrawable_portion' => 'decimal:2',
             'security_deposit_balance' => 'decimal:2',
             'clawback_debt_balance' => 'decimal:2',
             'updated_at' => 'datetime',
         ];
+    }
+
+    public function withdrawableBalance(): float
+    {
+        return round(max(0.0, (float) $this->available_balance - (float) $this->non_withdrawable_portion), 2);
     }
 
     public function user(): BelongsTo

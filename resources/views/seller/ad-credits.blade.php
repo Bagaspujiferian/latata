@@ -26,8 +26,8 @@
                     </div>
                 </div>
 
-                {{-- Store Tier & Commission Discount Bar --}}
-                <div class="p-4 rounded-xl bg-[#F8FAFC] border border-[#E4E8EE] space-y-2.5 text-xs">
+                {{-- Anti-Gaming Store Tier & Commission Discount Bar --}}
+                <div class="p-4 rounded-xl bg-[#F8FAFC] border border-[#E4E8EE] space-y-3 text-xs">
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <div class="flex items-center gap-2">
                             <span class="px-2.5 py-1 rounded-lg bg-[#0068E1] text-white font-mono-tabular text-[11px] font-extrabold">
@@ -39,8 +39,10 @@
                             </span>
                         </div>
                         <div class="font-mono-tabular text-[11px] text-[#4B5563]">
-                            Pesanan Selesai Terverifikasi: <strong class="text-[#111827]">{{ $storeLevel['completed_orders'] }}</strong>
-                            &middot; SLA Rata-Rata: <strong class="text-[#111827]">{{ number_format((float) $storeLevel['avg_delivery_minutes'], 1) }} mnt</strong>
+                            SLA Rata-Rata: <strong class="text-[#111827]">{{ number_format((float) $storeLevel['avg_delivery_minutes'], 1) }} mnt</strong>
+                            @if($storeLevel['target_sla_minutes'])
+                                <span>(Target &le; {{ number_format((float) $storeLevel['target_sla_minutes'], 0) }} mnt)</span>
+                            @endif
                         </div>
                     </div>
 
@@ -48,9 +50,34 @@
                         <div class="h-full rounded-full bg-[#0068E1]" style="width: {{ max(6, (int) $storeLevel['progress_percent']) }}%"></div>
                     </div>
 
+                    {{-- 3 Anti-Gaming Qualification Metrics --}}
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 font-mono-tabular">
+                        <div class="p-2.5 rounded-lg bg-white border border-[#E4E8EE]">
+                            <div class="text-[10px] font-semibold text-[#6B7280] uppercase">Pesanan Qualify (&ge; Rp 10rb)</div>
+                            <div class="text-sm font-extrabold text-[#111827] mt-0.5">
+                                {{ $storeLevel['qualifying_orders'] }}
+                                <span class="text-[11px] font-normal text-[#6B7280]">/ {{ $storeLevel['target_orders'] ?? '100+' }}</span>
+                            </div>
+                        </div>
+                        <div class="p-2.5 rounded-lg bg-white border border-[#E4E8EE]">
+                            <div class="text-[10px] font-semibold text-[#6B7280] uppercase">Pembeli Unik Terverifikasi</div>
+                            <div class="text-sm font-extrabold text-[#111827] mt-0.5">
+                                {{ $storeLevel['unique_buyers'] }}
+                                <span class="text-[11px] font-normal text-[#6B7280]">/ {{ $storeLevel['target_unique_buyers'] ?? '35+' }}</span>
+                            </div>
+                        </div>
+                        <div class="p-2.5 rounded-lg bg-white border border-[#E4E8EE]">
+                            <div class="text-[10px] font-semibold text-[#6B7280] uppercase">GMV Qualify Terpenuhi</div>
+                            <div class="text-sm font-extrabold text-[#047857] mt-0.5">
+                                Rp {{ number_format((float) $storeLevel['qualifying_gmv'], 0, ',', '.') }}
+                                <span class="text-[10px] font-normal text-[#6B7280]">/ {{ $storeLevel['target_gmv'] ? 'Rp '.number_format((float) $storeLevel['target_gmv'], 0, ',', '.') : 'Rp 15jt+' }}</span>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="flex flex-wrap items-center justify-between text-[11px] text-[#6B7280]">
                         @if($storeLevel['next_level_orders'])
-                            <span>Target berikutnya: <strong class="text-[#111827]">{{ $storeLevel['next_level_label'] }}</strong> ({{ $storeLevel['completed_orders'] }}/{{ $storeLevel['next_level_orders'] }} pesanan)</span>
+                            <span>Target berikutnya: <strong class="text-[#111827]">{{ $storeLevel['next_level_label'] }}</strong> (Anti-Gaming: pesanan &ge; Rp 10.000, pembeli unik &amp; GMV)</span>
                         @else
                             <span class="text-[#047857] font-semibold">Anda telah mencapai tier tertinggi Juragan Sultan!</span>
                         @endif
@@ -73,8 +100,10 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     @foreach($packages as $pkg)
                         <form method="POST" action="{{ route('seller.ad-credits.purchase') }}"
+                              x-data="{ submittingPkg: false }" @submit="submittingPkg = true"
                               class="card-elevate bg-white border {{ $pkg->badge_label ? 'border-[#0068E1] ring-1 ring-[#0068E1]/15' : 'border-[#E4E8EE]' }} rounded-xl p-5 flex flex-col justify-between gap-4 text-xs">
                             @csrf
+                            <input type="hidden" name="_idempotency_key" value="{{ (string) \Illuminate\Support\Str::uuid() }}">
                             <input type="hidden" name="package_id" value="{{ $pkg->id }}">
 
                             <div class="space-y-2">
@@ -105,9 +134,9 @@
                                                class="w-full h-9 px-3 font-mono-tabular text-center tracking-[0.25em] bg-[#F8FAFC] border border-[#D1D5DB] rounded-lg focus:bg-white focus:border-[#0068E1] focus:outline-none">
                                     </div>
                                 @endif
-                                <button type="submit"
-                                        class="btn-tactile w-full h-10 rounded-lg bg-[#0068E1] hover:bg-[#0055B8] text-white font-bold cursor-pointer">
-                                    Beli via Saldo Aktif
+                                <button type="submit" :disabled="submittingPkg"
+                                        class="btn-tactile w-full h-10 rounded-lg bg-[#0068E1] hover:bg-[#0055B8] text-white font-bold cursor-pointer disabled:opacity-65">
+                                    <span x-text="submittingPkg ? 'Memproses...' : 'Beli via Saldo Aktif'"></span>
                                 </button>
                             </div>
                         </form>
@@ -127,10 +156,12 @@
                         @forelse($products as $prod)
                             <div class="row-interactive p-3.5 flex items-center justify-between gap-3 text-xs">
                                 <div class="min-w-0">
-                                    <div class="flex items-center gap-2">
+                                    <div class="flex flex-wrap items-center gap-2">
                                         <span class="font-bold text-[#111827] truncate">{{ $prod->title }}</span>
                                         @if($prod->is_featured)
-                                            <span class="px-1.5 py-0.2 rounded bg-[#ECFDF5] border border-[#A7F3D0] text-[#047857] text-[10px] font-bold shrink-0">FEATURED</span>
+                                            <span class="px-1.5 py-0.2 rounded bg-[#ECFDF5] border border-[#A7F3D0] text-[#047857] text-[10px] font-bold shrink-0">
+                                                {{ $prod->featured_until ? 'Featured hingga '.$prod->featured_until->format('d M Y') : 'FEATURED' }}
+                                            </span>
                                         @endif
                                     </div>
                                     <div class="font-mono-tabular text-[11px] text-[#6B7280] mt-0.5">

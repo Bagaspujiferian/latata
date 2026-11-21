@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\DuplicateBankAccountException;
 use App\Models\UserBankAccount;
 use App\Models\WithdrawalRequest;
 use DomainException;
@@ -9,6 +10,13 @@ use Illuminate\Support\Facades\DB;
 
 class BankAccountService
 {
+    public function computeBankAccountBlindHash(string $bankCode, string $sanitizedAccountNumber): string
+    {
+        $canonical = strtoupper(trim($bankCode)).':'.trim($sanitizedAccountNumber);
+
+        return hash_hmac('sha256', $canonical, (string) config('app.key'));
+    }
+
     /**
      * @param  array{bank_code: string, bank_name?: ?string, account_number: string, account_holder_name: string, is_primary?: bool}  $data
      */
@@ -29,7 +37,22 @@ class BankAccountService
             throw new DomainException('Nama pemilik rekening minimal 3 karakter.');
         }
 
-        return DB::transaction(function () use ($userId, $bankCode, $bankName, $accountNumber, $holderName, $data): UserBankAccount {
+        $blindHash = $this->computeBankAccountBlindHash($bankCode, $accountNumber);
+
+        return DB::transaction(function () use ($userId, $bankCode, $bankName, $accountNumber, $holderName, $blindHash, $data): UserBankAccount {
+            // Anti-Tuyul Cross-User Blind Hash Lock Check
+            $activeCollision = UserBankAccount::where('active_account_lock_hash', $blindHash)
+                ->lockForUpdate()
+                ->first();
+
+            if ($activeCollision) {
+                if ((int) $activeCollision->user_id !== $userId) {
+                    throw new DuplicateBankAccountException('Nomor rekening ini sudah terdaftar aktif pada akun NexaTrade lain.');
+                }
+
+                throw new DuplicateBankAccountException("Rekening {$bankCode} ({$accountNumber}) sudah tersimpan di akun Anda.");
+            }
+
             $existingAccounts = UserBankAccount::where('user_id', $userId)
                 ->lockForUpdate()
                 ->get();
@@ -39,7 +62,7 @@ class BankAccountService
             });
 
             if ($duplicate) {
-                throw new DomainException("Rekening {$bankCode} ({$accountNumber}) sudah tersimpan di akun Anda.");
+                throw new DuplicateBankAccountException("Rekening {$bankCode} ({$accountNumber}) sudah tersimpan di akun Anda.");
             }
 
             $makePrimary = $existingAccounts->isEmpty() || (bool) ($data['is_primary'] ?? false);
@@ -53,6 +76,8 @@ class BankAccountService
                 'bank_code' => $bankCode,
                 'bank_name' => $bankName,
                 'account_number' => $accountNumber,
+                'account_blind_hash' => $blindHash,
+                'active_account_lock_hash' => $blindHash,
                 'account_holder_name' => $holderName,
                 'is_verified' => true,
                 'is_primary' => $makePrimary,
@@ -104,6 +129,7 @@ class BankAccountService
 
             $wasPrimary = $target->is_primary;
             $target->is_primary = false;
+            $target->active_account_lock_hash = null;
             $target->save();
             $target->delete();
 

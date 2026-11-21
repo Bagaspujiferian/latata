@@ -116,5 +116,68 @@
                 </button>
             </form>
         </div>
+
+        {{-- Card 3: Self-Service Wallet PIN 6-Digit Reset (Single-Use 15-Minute Token) --}}
+        <div class="bg-white border border-[#E4E8EE] rounded-xl p-5 space-y-4 text-xs animate-enter" style="--stagger-index: 3">
+            <div class="pb-3 border-b border-[#F1F5F9] flex flex-wrap items-center justify-between gap-2">
+                <div>
+                    <h2 class="text-sm font-bold text-[#111827]">Lupa PIN Dompet? Ajukan Reset Token</h2>
+                    <p class="text-[11px] text-[#6B7280] mt-0.5">
+                        Terbitkan token pemulihan PIN sekali pakai (berlaku 15 menit, rate-limited 3x/15 menit) untuk mengatur ulang PIN 6-digit sekaligus membuka lockout 5x salah.
+                    </p>
+                </div>
+                <span class="px-2.5 py-1 rounded-full bg-[#EFF6FF] border border-[#BFDBFE] text-[#0068E1] text-[10px] font-bold font-mono-tabular">
+                    SINGLE-USE 15M TOKEN
+                </span>
+            </div>
+
+            @if(session('pin_reset_preview_token'))
+                <div class="p-3.5 rounded-xl bg-[#FFF4ED] border border-[#FED7AA] space-y-1 text-[#9A3412]">
+                    <div class="font-bold">Pratinjau Token Reset PIN (Mode Demo Lokal)</div>
+                    <div class="font-mono-tabular text-sm font-extrabold text-[#C2410C] select-all">{{ session('pin_reset_preview_token') }}</div>
+                    <p class="text-[10px]">Salin token di atas ke formulir verifikasi di samping kanan (tersembunyi 100% di produksi).</p>
+                </div>
+            @endif
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
+                <form method="POST" action="{{ route('account.security.pin-reset.request') }}" class="p-4 rounded-xl bg-[#F8FAFC] border border-[#E4E8EE] space-y-3">
+                    @csrf
+                    <div class="font-bold text-[#111827]">Langkah 1: Minta Token Reset PIN</div>
+                    <div>
+                        <label class="block font-semibold text-[#374151] mb-1">Kata Sandi Login Akun (Opsional bila email aktif)</label>
+                        <input type="password" name="current_password" placeholder="Masukkan kata sandi akun Anda"
+                               class="w-full h-9 px-3 bg-white border border-[#D1D5DB] rounded-lg focus:border-[#0068E1] focus:outline-none">
+                    </div>
+                    <button type="submit" class="btn-tactile w-full h-9 rounded-lg bg-[#F05A28] hover:bg-[#D94B1C] text-white font-bold cursor-pointer">
+                        Ajukan Token Reset PIN
+                    </button>
+                </form>
+
+                <form method="POST" action="{{ route('account.security.pin-reset.confirm') }}" class="p-4 rounded-xl bg-[#F8FAFC] border border-[#E4E8EE] space-y-3">
+                    @csrf
+                    <div class="font-bold text-[#111827]">Langkah 2: Verifikasi Token &amp; Atur PIN Baru</div>
+                    <div>
+                        <label class="block font-semibold text-[#374151] mb-1">Token Reset PIN *</label>
+                        <input type="text" name="token" value="{{ session('pin_reset_preview_token', '') }}" required placeholder="Tempel token reset PIN..."
+                               class="w-full h-9 px-3 font-mono-tabular bg-white border border-[#D1D5DB] rounded-lg focus:border-[#0068E1] focus:outline-none">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <div>
+                            <label class="block font-semibold text-[#374151] mb-1">PIN Baru (6 Angka) *</label>
+                            <input type="password" name="new_pin" required inputmode="numeric" maxlength="6" pattern="\d{6}" placeholder="••••••"
+                                   class="w-full h-9 px-3 font-mono-tabular text-center tracking-[0.25em] bg-white border border-[#0068E1] rounded-lg focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block font-semibold text-[#374151] mb-1">Konfirmasi PIN *</label>
+                            <input type="password" name="new_pin_confirmation" required inputmode="numeric" maxlength="6" pattern="\d{6}" placeholder="••••••"
+                                   class="w-full h-9 px-3 font-mono-tabular text-center tracking-[0.25em] bg-white border border-[#D1D5DB] rounded-lg focus:border-[#0068E1] focus:outline-none">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-tactile w-full h-9 rounded-lg bg-[#00AA5B] hover:bg-[#00924E] text-white font-bold cursor-pointer">
+                        Reset PIN &amp; Buka Lockout
+                    </button>
+                </form>
+            </div>
+        </div>
     </div>
 @endsection

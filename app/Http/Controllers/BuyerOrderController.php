@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PaymentInvoice;
 use App\Models\WalletMutation;
+use App\Models\WalletTopUp;
 use App\Models\WarrantyClaim;
 use App\Services\ChatModerationService;
 use App\Services\OrderStateAndSlaService;
@@ -197,6 +198,11 @@ class BuyerOrderController extends Controller
             ->limit(100)
             ->get();
 
-        return view('buyer.wallet', compact('user', 'mutations'));
+        $topups = WalletTopUp::where('user_id', $user->id)
+            ->orderByDesc('id')
+            ->limit(10)
+            ->get();
+
+        return view('buyer.wallet', compact('user', 'mutations', 'topups'));
     }
 }

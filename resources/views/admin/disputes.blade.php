@@ -85,6 +85,61 @@
                                     Menangkan Penjual &rarr; Release Escrow
                                 </button>
                             </form>
+
+                            {{-- Verdict 3: Partial Split Settlement with Live Alpine.js Calculator --}}
+                            @php
+                                $buyerBasis = (float) $order->buyer_payable_amount > 0 ? (float) $order->buyer_payable_amount : (float) $order->gross_amount;
+                                $sellerEscrow = (float) $order->seller_escrow_amount;
+                            @endphp
+                            <form method="POST" action="{{ route('admin.disputes.resolve', $order->order_code) }}"
+                                  x-data="{
+                                      pct: 60,
+                                      buyerBasis: {{ $buyerBasis }},
+                                      sellerEscrow: {{ $sellerEscrow }},
+                                      submittingSplit: false,
+                                      get buyerRefund() {
+                                          return Math.round(this.buyerBasis * (Math.min(99, Math.max(1, Number(this.pct) || 50)) / 100));
+                                      },
+                                      get sellerRelease() {
+                                          return Math.round(this.sellerEscrow * ((100 - Math.min(99, Math.max(1, Number(this.pct) || 50))) / 100));
+                                      }
+                                  }"
+                                  @submit="submittingSplit = true"
+                                  class="p-3.5 rounded-xl bg-[#EFF6FF] border border-[#BFDBFE] space-y-2.5 text-xs">
+                                @csrf
+                                <input type="hidden" name="verdict" value="SPLIT_SETTLEMENT">
+
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="font-bold text-[#1E40AF]">Putusan 3: Split Settlement (Putusan Parsial)</span>
+                                    <span class="font-mono-tabular px-2 py-0.5 rounded bg-white border border-[#BFDBFE] text-[10px] font-extrabold text-[#0068E1]"
+                                          x-text="pct + '% Pembeli / ' + (100 - pct) + '% Penjual'"></span>
+                                </div>
+
+                                <div class="space-y-1.5">
+                                    <div class="flex items-center gap-2">
+                                        <input type="range" min="1" max="99" step="1" x-model.number="pct" class="flex-1 accent-[#0068E1] cursor-pointer">
+                                        <input type="number" name="buyer_refund_percent" min="1" max="99" required x-model.number="pct"
+                                               class="w-16 h-8 px-2 font-mono-tabular text-center font-bold bg-white border border-[#BFDBFE] rounded-lg">
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-2 font-mono-tabular text-[11px]">
+                                        <div class="p-2 rounded-lg bg-white border border-[#BFDBFE]">
+                                            <div class="text-[9px] uppercase font-semibold text-[#6B7280]">Refund Pembeli</div>
+                                            <div class="font-extrabold text-[#0068E1]" x-text="window.formatRupiah(buyerRefund)"></div>
+                                        </div>
+                                        <div class="p-2 rounded-lg bg-white border border-[#A7F3D0]">
+                                            <div class="text-[9px] uppercase font-semibold text-[#6B7280]">Cair ke Penjual</div>
+                                            <div class="font-extrabold text-[#047857]" x-text="window.formatRupiah(sellerRelease)"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <input type="text" name="admin_notes" required value="Putusan tengah adil: item diterima sebagian, refund parsial ke pembeli & pencairan proporsional ke penjual."
+                                       class="w-full h-8 px-2.5 bg-white border border-[#BFDBFE] rounded-lg text-xs">
+                                <button type="submit" :disabled="submittingSplit"
+                                        class="btn-tactile w-full py-2 rounded-lg bg-[#0068E1] hover:bg-[#0055B8] text-white font-bold cursor-pointer disabled:opacity-65">
+                                    <span x-text="submittingSplit ? 'Mengeksekusi Split Settlement...' : 'Eksekusi Split Settlement'"></span>
+                                </button>
+                            </form>
                         </div>
 
                         {{-- Right Column (7/12): Forensic Moderated Chat Transcript --}}
@@ -154,6 +209,11 @@
                                 <div>
                                     <span class="font-mono-tabular font-bold text-[#111827]">{{ $rd->order_code }}</span>
                                     <span class="ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold {{ $rd->status === 'COMPLETED' ? 'bg-[#ECFDF5] text-[#047857]' : 'bg-[#FEF2F2] text-[#B91C1C]' }}">{{ $rd->status }}</span>
+                                    @if($rd->dispute_buyer_refund_percent)
+                                        <span class="ml-1.5 px-2 py-0.5 rounded-full bg-[#EFF6FF] border border-[#BFDBFE] text-[#0068E1] font-mono-tabular text-[10px] font-bold">
+                                            SPLIT {{ $rd->dispute_buyer_refund_percent }}%/{{ 100 - $rd->dispute_buyer_refund_percent }}%
+                                        </span>
+                                    @endif
                                     <span class="ml-2 text-[#6B7280]">{{ $rd->buyer?->name }} vs {{ $rd->sellerProfile?->store_name }}</span>
                                 </div>
                                 <span class="font-mono-tabular font-bold text-[#111827]">Rp {{ number_format((float) $rd->gross_amount, 0, ',', '.') }}</span>

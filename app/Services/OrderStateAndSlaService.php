@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\AntiGestunWithdrawalException;
 use App\Exceptions\InsufficientWalletBalanceException;
 use App\Models\Order;
 use App\Models\OrderReview;
@@ -25,6 +26,7 @@ class OrderStateAndSlaService
         private readonly AccountWarrantyService $warrantyService,
         private readonly VoucherAccountingService $voucherService,
         private readonly FlashSaleService $flashSaleService,
+        private readonly AdminCmsAndAuditService $auditService,
     ) {}
 
     public function sellerSubmitManualDelivery(
@@ -289,12 +291,19 @@ class OrderStateAndSlaService
         int $adminId,
         string $verdict,
         string $adminNotes,
+        ?int $buyerRefundPercent = null,
     ): Order {
-        if (! in_array($verdict, ['RELEASE_TO_SELLER', 'REFUND_TO_BUYER'], true)) {
+        if (! in_array($verdict, ['RELEASE_TO_SELLER', 'REFUND_TO_BUYER', 'SPLIT_SETTLEMENT'], true)) {
             throw new DomainException("Putusan arbitrase tidak valid: [{$verdict}].");
         }
 
-        return DB::transaction(function () use ($orderId, $adminId, $verdict, $adminNotes): Order {
+        if ($verdict === 'SPLIT_SETTLEMENT') {
+            if ($buyerRefundPercent === null || $buyerRefundPercent < 1 || $buyerRefundPercent > 99) {
+                throw new DomainException('Persentase refund pembeli untuk Split Settlement wajib antara 1% hingga 99%.');
+            }
+        }
+
+        return DB::transaction(function () use ($orderId, $adminId, $verdict, $adminNotes, $buyerRefundPercent): Order {
             $admin = User::findOrFail($adminId);
             if (! $admin->isAdmin()) {
                 throw new DomainException('Hanya Admin Arbitrase yang dapat memutus sengketa.');
@@ -317,6 +326,93 @@ class OrderStateAndSlaService
                 );
 
                 return $order->fresh(['items', 'messages']);
+            }
+
+            if ($verdict === 'SPLIT_SETTLEMENT') {
+                StateTransitionGuard::assertOrderTransition($orderRow->status, 'COMPLETED', "Admin Split Verdict {$orderRow->order_code}");
+
+                $order = Order::with(['items', 'messages', 'paymentInvoice'])->findOrFail($orderId);
+                $buyerPct = (int) $buyerRefundPercent;
+                $sellerPct = 100 - $buyerPct;
+
+                $buyerBasis = (float) $order->buyer_payable_amount > 0
+                    ? (float) $order->buyer_payable_amount
+                    : (float) $order->gross_amount;
+                $buyerRefundAmount = round($buyerBasis * ($buyerPct / 100), 2);
+                $sellerReleaseAmount = round((float) $order->seller_escrow_amount * ($sellerPct / 100), 2);
+
+                $this->ledgerService->executeDisputeSplitSettlement(
+                    sellerId: (int) $order->seller_id,
+                    buyerId: (int) $order->buyer_id,
+                    orderId: (int) $order->id,
+                    sellerEscrowAmount: (float) $order->seller_escrow_amount,
+                    sellerReleaseAmount: $sellerReleaseAmount,
+                    buyerRefundAmount: $buyerRefundAmount,
+                    orderCode: $order->order_code,
+                    reason: "Split {$buyerPct}% Pembeli / {$sellerPct}% Penjual: {$adminNotes}",
+                );
+
+                $now = now();
+                DB::table('orders')->where('id', $orderId)->update([
+                    'status' => 'COMPLETED',
+                    'completed_at' => $now,
+                    'dispute_buyer_refund_percent' => $buyerPct,
+                    'dispute_buyer_refund_amount' => number_format($buyerRefundAmount, 2, '.', ''),
+                    'dispute_seller_release_amount' => number_format($sellerReleaseAmount, 2, '.', ''),
+                    'cancelled_reason' => mb_substr("Split Settlement ({$buyerPct}% Pembeli / {$sellerPct}% Penjual): {$adminNotes}", 0, 255),
+                    'updated_at' => $now,
+                ]);
+
+                $this->auditService->recordAudit(
+                    adminId: $adminId,
+                    action: 'dispute.split_settlement',
+                    entityType: 'order',
+                    entityId: (int) $order->id,
+                    before: ['status' => $orderRow->status],
+                    after: [
+                        'status' => 'COMPLETED',
+                        'dispute_buyer_refund_percent' => $buyerPct,
+                        'dispute_buyer_refund_amount' => $buyerRefundAmount,
+                        'dispute_seller_release_amount' => $sellerReleaseAmount,
+                    ],
+                    notes: "Putusan Split Settlement {$order->order_code} ({$buyerPct}% Pembeli = Rp ".number_format($buyerRefundAmount, 0, ',', '.').", {$sellerPct}% Penjual = Rp ".number_format($sellerReleaseAmount, 0, ',', '.')."): {$adminNotes}",
+                );
+
+                $this->chatModerationService->postOrderMessage(
+                    order: $order,
+                    sender: $admin,
+                    rawMessage: "[PUTUSAN ARBITRASE: SPLIT SETTLEMENT {$buyerPct}% PEMBELI / {$sellerPct}% PENJUAL] {$adminNotes}. Refund Pembeli Rp ".number_format($buyerRefundAmount, 0, ',', '.').' & Pencairan Penjual Rp '.number_format($sellerReleaseAmount, 0, ',', '.').'.',
+                    senderRoleOverride: 'admin',
+                );
+
+                $buyerId = (int) $order->buyer_id;
+                $sellerId = (int) $order->seller_id;
+                $orderCode = $order->order_code;
+                $oid = (int) $order->id;
+
+                DB::afterCommit(function () use ($buyerId, $sellerId, $orderCode, $oid, $buyerPct, $sellerPct, $buyerRefundAmount, $sellerReleaseAmount): void {
+                    $this->notificationService->notify(
+                        userId: $buyerId,
+                        category: 'escrow',
+                        title: "Putusan Split Settlement {$orderCode} ({$buyerPct}% Refund)",
+                        body: 'Admin memutuskan pembagian adil. Refund Rp '.number_format($buyerRefundAmount, 0, ',', '.').' telah masuk ke Saldo Aktif Anda.',
+                        actionUrl: "/buyer/orders/{$orderCode}",
+                        refType: 'order',
+                        refId: $oid,
+                    );
+
+                    $this->notificationService->notify(
+                        userId: $sellerId,
+                        category: 'escrow',
+                        title: "Putusan Split Settlement {$orderCode} ({$sellerPct}% Cair)",
+                        body: 'Admin memutuskan pembagian adil. Dana Rp '.number_format($sellerReleaseAmount, 0, ',', '.').' telah dicairkan ke Saldo Aktif Toko Anda.',
+                        actionUrl: '/seller/wallet',
+                        refType: 'order',
+                        refId: $oid,
+                    );
+                });
+
+                return $order->fresh(['items', 'messages', 'paymentInvoice']);
             }
 
             StateTransitionGuard::assertOrderTransition($orderRow->status, 'REFUNDED', "Admin Verdict {$orderRow->order_code}");
@@ -611,6 +707,23 @@ class OrderStateAndSlaService
 
             $withdrawCode = 'WD-'.now()->format('Ymd').'-'.strtoupper(Str::random(6));
             $netPayout = round($amount - $adminFee, 2);
+
+            // Anti-Gestun Guard: Top-Up funds inside available_balance cannot be withdrawn to bank/e-wallet.
+            $walletRow = DB::table('wallets')
+                ->where('user_id', $userId)
+                ->lockForUpdate()
+                ->first();
+
+            if ($walletRow) {
+                $nonWithdrawable = round((float) ($walletRow->non_withdrawable_portion ?? 0), 2);
+                $maxWithdrawable = round(max(0.0, (float) $walletRow->available_balance - $nonWithdrawable), 2);
+
+                if ($nonWithdrawable > 0.0 && $amount > $maxWithdrawable) {
+                    throw new AntiGestunWithdrawalException(
+                        'Dana hasil Top-Up hanya dapat digunakan untuk berbelanja dan tidak dapat ditarik tunai. Maksimal penarikan saat ini: Rp '.number_format($maxWithdrawable, 0, ',', '.').'.'
+                    );
+                }
+            }
 
             // Upfront Debit & Row Lock (Anti Double-Withdrawal Loophole #10)
             $this->ledgerService->holdForWithdrawal($userId, $amount, $withdrawCode);

@@ -29,6 +29,8 @@ class UserBankAccount extends Model
         'bank_code',
         'bank_name',
         'account_number',
+        'account_blind_hash',
+        'active_account_lock_hash',
         'account_holder_name',
         'is_verified',
         'is_primary',
