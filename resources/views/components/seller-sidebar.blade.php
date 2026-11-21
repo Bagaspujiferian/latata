@@ -22,8 +22,14 @@
             'icon' => '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
         ],
         [
+            'route' => 'seller.vouchers',
+            'label' => 'Voucher Toko',
+            'active' => request()->routeIs('seller.vouchers*'),
+            'icon' => '<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/>',
+        ],
+        [
             'route' => 'seller.wallet',
-            'label' => 'Dompet & Tarik Saldo',
+            'label' => 'Dompet, Deposit & Tarik',
             'active' => request()->routeIs('seller.wallet'),
             'icon' => '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
         ],
@@ -59,9 +65,13 @@
                 </div>
                 <div class="min-w-0">
                     <div class="text-xs font-bold text-[#111827] truncate">{{ $profile?->store_name ?? 'TokoKu Seller' }}</div>
-                    <div class="flex items-center gap-1.5 mt-0.5">
-                        <span class="inline-block w-1.5 h-1.5 rounded-full {{ $effectiveOpen ? 'bg-[#00AA5B]' : 'bg-[#DC2626]' }}"></span>
-                        <span class="text-[11px] text-[#6B7280]">{{ $effectiveOpen ? 'Toko Buka' : 'Toko Tutup' }}</span>
+                    <div class="flex flex-wrap items-center gap-1.5 mt-0.5">
+                        @if($profile?->is_suspended)
+                            <span class="px-1.5 py-0.5 rounded bg-[#FEF2F2] border border-[#FECACA] text-[#B91C1C] text-[10px] font-extrabold uppercase tracking-wide">SUSPENDED</span>
+                        @else
+                            <span class="inline-block w-1.5 h-1.5 rounded-full {{ $effectiveOpen ? 'bg-[#00AA5B]' : 'bg-[#DC2626]' }}"></span>
+                            <span class="text-[11px] text-[#6B7280]">{{ $effectiveOpen ? 'Toko Buka' : 'Toko Tutup' }}</span>
+                        @endif
                         <span class="text-[10px] font-semibold px-1.5 py-0.2 bg-[#F1F5F9] text-[#4B5563] rounded">Lv.{{ $profile?->store_level ?? 1 }}</span>
                     </div>
                 </div>

@@ -12,9 +12,11 @@ class OrderItem extends Model
         'order_id',
         'product_id',
         'product_vault_id',
+        'flash_sale_item_id',
         'product_title_snapshot',
         'sku_snapshot',
         'unit_price_snapshot',
+        'original_unit_price',
         'quantity',
         'subtotal',
         'encrypted_delivery_payload',
@@ -25,6 +27,7 @@ class OrderItem extends Model
     {
         return [
             'unit_price_snapshot' => 'decimal:2',
+            'original_unit_price' => 'decimal:2',
             'quantity' => 'integer',
             'subtotal' => 'decimal:2',
         ];
@@ -43,5 +46,10 @@ class OrderItem extends Model
     public function vault(): BelongsTo
     {
         return $this->belongsTo(ProductVault::class, 'product_vault_id', 'id');
+    }
+
+    public function flashSaleItem(): BelongsTo
+    {
+        return $this->belongsTo(FlashSaleItem::class);
     }
 }

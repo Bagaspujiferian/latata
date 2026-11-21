@@ -16,6 +16,9 @@ use App\Models\SellerProfile;
 use App\Models\StoreOperatingHour;
 use App\Models\User;
 use App\Models\Wallet;
+use App\Models\WarrantyClaim;
+use App\Services\AccountWarrantyService;
+use App\Services\AdminCmsAndAuditService;
 use App\Services\BankAccountService;
 use App\Services\ChatModerationService;
 use App\Services\CheckoutSplitOrderService;
@@ -44,6 +47,8 @@ class DatabaseSeeder extends Seeder
         $conversationService = app(ConversationService::class);
         $kycService = app(SellerKycService::class);
         $notificationService = app(NotificationService::class);
+        $warrantyService = app(AccountWarrantyService::class);
+        $cmsService = app(AdminCmsAndAuditService::class);
 
         // =====================================================================
         // 1. USERS, WALLETS, SELLER PROFILES & 7-DAY OPERATING HOURS
@@ -256,6 +261,8 @@ class DatabaseSeeder extends Seeder
             'slug' => 'akun-sultan-instan',
             'delivery_method' => 'instant_vault',
             'platform_fee_percent' => '5.00',
+            'escrow_hold_hours' => 72,
+            'warranty_days' => 30,
             'required_inputs_schema' => [],
         ]);
 
@@ -298,6 +305,8 @@ class DatabaseSeeder extends Seeder
             'slug' => 'akun-sultan-instan',
             'delivery_method' => 'instant_vault',
             'platform_fee_percent' => '5.00',
+            'escrow_hold_hours' => 72,
+            'warranty_days' => 30,
             'required_inputs_schema' => [],
         ]);
 
@@ -1043,6 +1052,161 @@ class DatabaseSeeder extends Seeder
             actionUrl: '/admin/kyc?tab=flagged_chat',
             refType: 'conversation',
             refId: $conv2->id,
+        );
+
+        // =====================================================================
+        // (M) PHASE 3: SECURITY DEPOSITS, VOUCHERS, ACTIVE FLASH SALE,
+        //     ANTI-HACKBACK WARRANTIES, OPEN CLAIM, MODERATION REPORT & AUDITS
+        // =====================================================================
+
+        // 1. Fund & lock Seller Security Deposits cleanly via double-entry ledger (available_balance stays unchanged)
+        $ledgerService->adminDemoTopup($seller1->id, 250000.00, 'SEED-DEP-FUND-S1', 'Setoran modal Deposit Jaminan Anti-Hackback Juragan Voucher');
+        $warrantyService->transferAvailableToSecurityDeposit($seller1->id, 250000.00);
+
+        $ledgerService->adminDemoTopup($seller2->id, 500000.00, 'SEED-DEP-FUND-S2', 'Setoran modal Deposit Jaminan Anti-Hackback Sultan Akun');
+        $warrantyService->transferAvailableToSecurityDeposit($seller2->id, 500000.00);
+
+        // 2. Seed 1 Completed Account Order for Buyer 1 (neutralized top-up so Buyer 1 balance stays exact Rp 750.000)
+        //    -> Buyer 1 immediately owns an ACTIVE 30-day Sertifikat Garansi Anti-Hackback!
+        $ledgerService->adminDemoTopup($buyer1->id, 485000.00, 'SEED-TOPUP-B1-VAL', 'Alokasi dana demo untuk pesanan Akun Valorant Bergaransi');
+        $invCompletedVal = $checkoutService->checkout(
+            buyerId: $buyer1->id,
+            paymentMode: 'wallet_full',
+            paymentChannel: 'wallet_full',
+            explicitItems: [['product_id' => $pValAccount->id, 'quantity' => 1]],
+            clearCart: false,
+        );
+        $ordCompletedVal = $invCompletedVal->orders->firstOrFail();
+        $orderStateService->buyerConfirmOrderCompleted(
+            orderId: $ordCompletedVal->id,
+            buyerId: $buyer1->id,
+            rating: 5,
+            comment: 'Akun Valorant Immortal Kuronami mulus, sertifikat garansi Anti-Hackback 30 hari langsung terbit otomatis!',
+        );
+
+        // 3. Seed 1 immediately reviewable OPEN Hackback Warranty Claim on Buyer 2's completed Genshin Account order
+        $hackbackEvidencePath = 'private/warranty-claims/seeded/hackback-evidence-01.png';
+        Storage::disk('local')->put(
+            $hackbackEvidencePath,
+            $this->makePlaceholderPng('BUKTI KLAIM GARANSI HACKBACK (PRIVATE DISK)', [254, 242, 242], [220, 38, 38]),
+        );
+
+        $ordCompleted2->load('warranty');
+        if ($ordCompleted2->warranty) {
+            WarrantyClaim::create([
+                'claim_code' => 'CLM-SEED-202601',
+                'order_warranty_id' => $ordCompleted2->warranty->id,
+                'order_id' => $ordCompleted2->id,
+                'buyer_id' => $buyer2->id,
+                'seller_id' => $seller2->id,
+                'reason_category' => 'account_reclaimed_hackback',
+                'description' => 'Email HoYoverse akun Genshin AR 58 tiba-tiba menerima notifikasi unlink & password diubah oleh pemilik lama 4 hari setelah pembelian. Mohon investigasi & klaim garansi 30 hari.',
+                'evidence_paths' => [$hackbackEvidencePath],
+                'status' => 'open',
+            ]);
+            $ordCompleted2->warranty->update(['status' => 'claimed']);
+
+            $notificationService->notify(
+                userId: $admin->id,
+                category: 'warranty',
+                title: 'Klaim Garansi Hackback Baru: CLM-SEED-202601',
+                body: 'Fajar ProPlayer mengajukan klaim pertanggungan Rp 320.000 pada pesanan '.$ordCompleted2->order_code.'.',
+                actionUrl: '/admin/warranties',
+                refType: 'warranty_claim',
+                refId: $ordCompleted2->warranty->id,
+            );
+        }
+
+        // 4. Seed 3 Vouchers (2 Platform Subsidy + 1 Seller Store Voucher) via CMS Service (generates Admin Audit Logs!)
+        $cmsService->createVoucher($admin->id, 'platform', [
+            'code' => 'NEXAHEMAT20',
+            'title' => 'Subsidi NexaTrade Hemat Rp 20.000',
+            'discount_type' => 'fixed',
+            'discount_value' => 20000,
+            'min_purchase_amount' => 50000,
+            'quota_total' => 50,
+            'max_uses_per_user' => 2,
+            'starts_at' => now()->subDay(),
+            'ends_at' => now()->addDays(30),
+        ]);
+
+        $cmsService->createVoucher($admin->id, 'platform', [
+            'code' => 'NEXAPERSEN10',
+            'title' => 'Subsidi Platform Diskon 10% (Maks Rp 35.000)',
+            'discount_type' => 'percent',
+            'discount_value' => 10,
+            'max_discount_amount' => 35000,
+            'min_purchase_amount' => 100000,
+            'quota_total' => 30,
+            'max_uses_per_user' => 2,
+            'starts_at' => now()->subDay(),
+            'ends_at' => now()->addDays(30),
+        ]);
+
+        $cmsService->createVoucher($seller1->id, 'seller', [
+            'code' => 'JURAGAN5K',
+            'title' => 'Voucher Toko Juragan Potongan Rp 5.000',
+            'discount_type' => 'fixed',
+            'discount_value' => 5000,
+            'min_purchase_amount' => 20000,
+            'quota_total' => 20,
+            'max_uses_per_user' => 2,
+            'starts_at' => now()->subDay(),
+            'ends_at' => now()->addDays(30),
+        ], $seller1->id);
+
+        // 5. Seed 1 Active Flash Sale on 3 Safe SKUs (never asserted at fixed prices in Phase 0/1/2 tests)
+        $flashSale = $cmsService->createFlashSale($admin->id, [
+            'title' => 'Flash Sale Gaming Akhir Pekan',
+            'banner_subtitle' => 'Kuota atomik terbatas — harga miring Top-Up H2H kilat!',
+            'starts_at' => now()->subHour(),
+            'ends_at' => now()->addHours(12),
+        ]);
+
+        $fsItem1 = $cmsService->attachFlashSaleItem($admin->id, $flashSale->id, [
+            'product_id' => $pMlbbWdp->id,
+            'flash_price' => 22900,
+            'flash_quota' => 5,
+            'max_qty_per_user' => 1,
+            'sort_order' => 1,
+        ]);
+        $fsItem1->update(['flash_sold' => 2]);
+
+        $fsItem2 = $cmsService->attachFlashSaleItem($admin->id, $flashSale->id, [
+            'product_id' => $pVal1375->id,
+            'flash_price' => 129000,
+            'flash_quota' => 5,
+            'max_qty_per_user' => 1,
+            'sort_order' => 2,
+        ]);
+        $fsItem2->update(['flash_sold' => 2]);
+
+        $fsItem3 = $cmsService->attachFlashSaleItem($admin->id, $flashSale->id, [
+            'product_id' => $pGenshin980->id,
+            'flash_price' => 169000,
+            'flash_quota' => 5,
+            'max_qty_per_user' => 1,
+            'sort_order' => 3,
+        ]);
+        $fsItem3->update(['flash_sold' => 2]);
+
+        // 6. Seed 1 Open Moderation Report so /admin/reports has an actionable item
+        $cmsService->submitReport($buyer1->id, [
+            'target_type' => 'product',
+            'target_id' => $pMlbbJoki->id,
+            'reason_category' => 'fake_listing',
+            'details' => 'Deskripsi estimasi waktu joki tertulis 30 menit tetapi di chat penjual menyebut antrean bisa sampai 6 jam di akhir pekan. Mohon verifikasi deskripsi produk.',
+        ]);
+
+        // 7. Promo notification for Buyer 1
+        $notificationService->notify(
+            userId: $buyer1->id,
+            category: 'promo',
+            title: 'Flash Sale & Voucher NEXAHEMAT20 Aktif!',
+            body: 'Gunakan kode NEXAHEMAT20 di Keranjang untuk hemat Rp 20.000 (subsidi platform) + cek sertifikat Garansi Anti-Hackback 30 hari Anda.',
+            actionUrl: '/cart',
+            refType: 'flash_sale',
+            refId: $flashSale->id,
         );
     }
 

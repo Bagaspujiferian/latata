@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\AdminChaosLabController;
+use App\Http\Controllers\AdminCmsController;
 use App\Http\Controllers\AdminKycController;
+use App\Http\Controllers\AdminWarrantyController;
 use App\Http\Controllers\BankAccountController;
 use App\Http\Controllers\BuyerOrderController;
 use App\Http\Controllers\CheckoutController;
@@ -12,7 +14,9 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\SellerDashboardController;
 use App\Http\Controllers\SellerKycController;
 use App\Http\Controllers\SellerProductController;
+use App\Http\Controllers\SellerPromoController;
 use App\Http\Controllers\StorefrontController;
+use App\Http\Controllers\WarrantyController;
 use App\Http\Controllers\WishlistController;
 use Illuminate\Support\Facades\Route;
 
@@ -59,17 +63,25 @@ Route::middleware(['auth'])->group(function (): void {
     Route::post('/wishlist/{product}/toggle', [WishlistController::class, 'toggleWishlist'])->name('wishlist.toggle');
     Route::post('/stores/{seller}/follow', [WishlistController::class, 'toggleFollow'])->name('stores.follow');
 
-    // Cart, Split Checkout & Invoices
+    // Cart, Split Checkout, Voucher Preview & Invoices
     Route::get('/cart', [CheckoutController::class, 'cart'])->name('cart.index');
     Route::post('/cart/add', [CheckoutController::class, 'addToCart'])->name('cart.add');
     Route::patch('/cart/{cartItem}', [CheckoutController::class, 'updateCartItem'])->name('cart.update');
     Route::delete('/cart/{cartItem}', [CheckoutController::class, 'removeCartItem'])->name('cart.remove');
+    Route::post('/checkout/voucher-preview', [CheckoutController::class, 'previewVoucher'])->name('checkout.voucher-preview');
     Route::post('/checkout', [CheckoutController::class, 'processCheckout'])->name('checkout.process');
 
     Route::get('/invoices/{invoice_code}', [CheckoutController::class, 'showInvoice'])->name('invoices.show');
     Route::post('/invoices/{invoice_code}/simulate-pay', [CheckoutController::class, 'simulateMidtransPay'])->name('invoices.simulate-pay');
 
-    // Buyer Orders & Wallet
+    // Buyer Orders, Anti-Hackback Warranties, Reports & Wallet
+    Route::get('/buyer/warranties', [WarrantyController::class, 'index'])->name('buyer.warranties');
+    Route::post('/buyer/orders/{order}/warranty-claim', [WarrantyController::class, 'fileClaim'])->name('buyer.orders.warranty-claim');
+    Route::post('/reports', [WarrantyController::class, 'submitReport'])->name('reports.store');
+    Route::get('/admin/warranties/{claim}/evidence/{index}', [AdminWarrantyController::class, 'streamEvidence'])
+        ->whereNumber('index')
+        ->name('admin.warranties.evidence');
+
     Route::get('/buyer/orders', [BuyerOrderController::class, 'index'])->name('buyer.orders.index');
     Route::get('/buyer/orders/{order_code}', [BuyerOrderController::class, 'show'])->name('buyer.orders.show');
     Route::post('/buyer/orders/{order_code}/decrypt/{orderItem}', [BuyerOrderController::class, 'decryptVaultItem'])->name('buyer.orders.decrypt');
@@ -110,7 +122,12 @@ Route::prefix('seller')->name('seller.')->middleware(['auth', 'role:seller'])->g
 
     Route::get('/wallet', [SellerDashboardController::class, 'wallet'])->name('wallet');
     Route::post('/wallet/withdraw', [SellerDashboardController::class, 'requestWithdrawal'])->name('wallet.withdraw');
+    Route::post('/wallet/lock-deposit', [SellerPromoController::class, 'lockDeposit'])->name('wallet.lock-deposit');
     Route::get('/bank-accounts', [BankAccountController::class, 'index'])->name('bank-accounts');
+
+    Route::get('/vouchers', [SellerPromoController::class, 'vouchers'])->name('vouchers');
+    Route::post('/vouchers', [SellerPromoController::class, 'storeVoucher'])->name('vouchers.store');
+    Route::patch('/vouchers/{voucher}/toggle', [SellerPromoController::class, 'toggleVoucher'])->name('vouchers.toggle');
 
     Route::get('/settings', [SellerDashboardController::class, 'settings'])->name('settings');
     Route::post('/settings', [SellerDashboardController::class, 'updateSettings'])->name('settings.update');
@@ -131,6 +148,33 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:admin'])->grou
     Route::get('/withdrawals', [AdminChaosLabController::class, 'withdrawals'])->name('withdrawals');
     Route::post('/withdrawals/{id}/approve', [AdminChaosLabController::class, 'approveWithdrawal'])->name('withdrawals.approve');
     Route::post('/withdrawals/{id}/reject', [AdminChaosLabController::class, 'rejectWithdrawal'])->name('withdrawals.reject');
+
+    // Phase 3: Anti-Hackback Warranty Court
+    Route::get('/warranties', [AdminWarrantyController::class, 'index'])->name('warranties.index');
+    Route::post('/warranties/{claim}/resolve', [AdminWarrantyController::class, 'resolve'])->name('warranties.resolve');
+
+    // Phase 3: Admin CMS — Master Catalog (Games, Categories, Attributes & Options)
+    Route::get('/cms/catalog', [AdminCmsController::class, 'catalog'])->name('cms.catalog');
+    Route::post('/cms/games', [AdminCmsController::class, 'storeGame'])->name('cms.games.store');
+    Route::put('/cms/games/{id}', [AdminCmsController::class, 'updateGame'])->name('cms.games.update');
+    Route::patch('/cms/games/{id}/toggle', [AdminCmsController::class, 'toggleGame'])->name('cms.games.toggle');
+    Route::post('/cms/categories', [AdminCmsController::class, 'storeCategory'])->name('cms.categories.store');
+    Route::put('/cms/categories/{id}', [AdminCmsController::class, 'updateCategory'])->name('cms.categories.update');
+    Route::post('/cms/attributes', [AdminCmsController::class, 'storeAttribute'])->name('cms.attributes.store');
+    Route::post('/cms/attributes/{attributeId}/options', [AdminCmsController::class, 'storeAttributeOption'])->name('cms.attributes.options.store');
+    Route::delete('/cms/options/{optionId}', [AdminCmsController::class, 'deleteAttributeOption'])->name('cms.attributes.options.delete');
+
+    // Phase 3: Admin CMS — Platform Vouchers & Flash Sales
+    Route::get('/cms/promos', [AdminCmsController::class, 'promos'])->name('cms.promos');
+    Route::post('/cms/vouchers', [AdminCmsController::class, 'storePlatformVoucher'])->name('cms.vouchers.store');
+    Route::patch('/cms/vouchers/{voucherId}/toggle', [AdminCmsController::class, 'toggleVoucher'])->name('cms.vouchers.toggle');
+    Route::post('/cms/flash-sales', [AdminCmsController::class, 'storeFlashSale'])->name('cms.flash-sales.store');
+    Route::post('/cms/flash-sales/{flashSaleId}/items', [AdminCmsController::class, 'attachFlashSaleItem'])->name('cms.flash-sales.items.attach');
+
+    // Phase 3: Trust & Safety Moderation Reports & Immutable Admin Audit Trail
+    Route::get('/reports', [AdminCmsController::class, 'reports'])->name('reports.index');
+    Route::post('/reports/{report}/resolve', [AdminCmsController::class, 'resolveReport'])->name('reports.resolve');
+    Route::get('/audit-logs', [AdminCmsController::class, 'auditLogs'])->name('audit-logs');
 
     Route::get('/chaos-lab', [AdminChaosLabController::class, 'chaosLab'])->name('chaos-lab');
     Route::post('/chaos-lab/run/{scenario}', [AdminChaosLabController::class, 'runScenario'])->name('chaos-lab.run');

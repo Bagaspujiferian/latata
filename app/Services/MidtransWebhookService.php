@@ -16,6 +16,7 @@ class MidtransWebhookService
         private readonly EscrowLedgerService $ledgerService,
         private readonly OrderFulfillmentDispatcher $fulfillmentDispatcher,
         private readonly OrderStateAndSlaService $orderStateAndSlaService,
+        private readonly VoucherAccountingService $voucherService,
     ) {}
 
     public function generateSignature(string $orderId, string $statusCode, string $grossAmount): string
@@ -185,6 +186,8 @@ class MidtransWebhookService
                     'paid_at' => now(),
                     'updated_at' => now(),
                 ]);
+
+                $this->voucherService->markVouchersAppliedForInvoice((int) $invoiceRow->id);
 
                 // Deterministic ascending lock on all child orders.
                 $childOrders = Order::where('payment_invoice_id', $invoiceRow->id)

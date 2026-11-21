@@ -48,6 +48,8 @@
                     <a href="{{ route('seller.dashboard') }}" class="font-medium text-[#0068E1] hover:underline">TokoKu (Seller Center)</a>
                 @endif
                 @if($currentUser?->isAdmin())
+                    <a href="{{ route('admin.cms.catalog') }}" class="font-medium text-[#0068E1] hover:underline">CMS Katalog</a>
+                    <a href="{{ route('admin.warranties.index') }}" class="font-medium text-[#0068E1] hover:underline">Klaim Garansi</a>
                     <a href="{{ route('admin.kyc.index') }}" class="font-medium text-[#0068E1] hover:underline">Verifikasi KYC</a>
                     <a href="{{ route('admin.chaos-lab') }}" class="font-medium text-[#0068E1] hover:underline">Admin &amp; Chaos Lab</a>
                 @endif
@@ -161,6 +163,9 @@
                                             'chat' => ['bg' => 'bg-[#EFF6FF] text-[#0068E1]', 'svg' => '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'],
                                             'kyc' => ['bg' => 'bg-[#FFF4ED] text-[#F05A28]', 'svg' => '<rect width="18" height="14" x="3" y="5" rx="2"/><circle cx="9" cy="12" r="2"/><path d="M15 10h3"/><path d="M15 14h3"/>'],
                                             'withdrawal' => ['bg' => 'bg-[#ECFDF5] text-[#047857]', 'svg' => '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>'],
+                                            'warranty' => ['bg' => 'bg-[#ECFDF5] text-[#00AA5B]', 'svg' => '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M12 8v4"/><path d="M12 16h.01"/>'],
+                                            'promo' => ['bg' => 'bg-[#FFF4ED] text-[#F05A28]', 'svg' => '<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/>'],
+                                            'moderation' => ['bg' => 'bg-[#FEF2F2] text-[#DC2626]', 'svg' => '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/>'],
                                             default => ['bg' => 'bg-[#F1F5F9] text-[#4B5563]', 'svg' => '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="16" y2="12"/><line x1="12" x2="12.01" y1="8" y2="8"/>'],
                                         };
                                     @endphp
@@ -298,6 +303,10 @@
                                     <svg class="w-4 h-4 text-[#6B7280]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect width="8" height="4" x="8" y="2" rx="1"/></svg>
                                     <span>Pesanan Saya</span>
                                 </a>
+                                <a href="{{ route('buyer.warranties') }}" class="flex items-center gap-2.5 px-3.5 py-2 hover:bg-[#ECFDF5] hover:text-[#047857]">
+                                    <svg class="w-4 h-4 text-[#00AA5B]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+                                    <span>Garansi Anti-Hackback</span>
+                                </a>
                                 <a href="{{ route('buyer.wishlist') }}" class="flex items-center justify-between px-3.5 py-2 hover:bg-[#F8FAFC] hover:text-[#0068E1]">
                                     <span class="flex items-center gap-2.5">
                                         <svg class="w-4 h-4 text-[#6B7280]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
@@ -354,10 +363,34 @@
                                         <svg class="w-4 h-4 text-[#6B7280]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                                         <span>Antrean Pesanan SLA</span>
                                     </a>
+                                    <a href="{{ route('seller.vouchers') }}" class="flex items-center gap-2.5 px-3.5 py-2 hover:bg-[#F8FAFC]">
+                                        <svg class="w-4 h-4 text-[#F05A28]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/></svg>
+                                        <span>Voucher Toko</span>
+                                    </a>
                                 @endif
 
                                 @if($currentUser->isAdmin())
                                     <div class="my-1 border-t border-[#F1F5F9]"></div>
+                                    <a href="{{ route('admin.cms.catalog') }}" class="flex items-center gap-2.5 px-3.5 py-2 hover:bg-[#EFF6FF] text-[#0068E1] font-semibold">
+                                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
+                                        <span>Master Katalog CMS</span>
+                                    </a>
+                                    <a href="{{ route('admin.cms.promos') }}" class="flex items-center gap-2.5 px-3.5 py-2 hover:bg-[#F8FAFC]">
+                                        <svg class="w-4 h-4 text-[#F05A28]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                                        <span>Promo &amp; Flash Sale</span>
+                                    </a>
+                                    <a href="{{ route('admin.warranties.index') }}" class="flex items-center gap-2.5 px-3.5 py-2 hover:bg-[#F8FAFC]">
+                                        <svg class="w-4 h-4 text-[#00AA5B]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+                                        <span>Klaim Garansi Hackback</span>
+                                    </a>
+                                    <a href="{{ route('admin.reports.index') }}" class="flex items-center gap-2.5 px-3.5 py-2 hover:bg-[#F8FAFC]">
+                                        <svg class="w-4 h-4 text-[#DC2626]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/></svg>
+                                        <span>Laporan Moderasi</span>
+                                    </a>
+                                    <a href="{{ route('admin.audit-logs') }}" class="flex items-center gap-2.5 px-3.5 py-2 hover:bg-[#F8FAFC]">
+                                        <svg class="w-4 h-4 text-[#6B7280]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/></svg>
+                                        <span>Audit Trail Log</span>
+                                    </a>
                                     <a href="{{ route('admin.kyc.index') }}" class="flex items-center justify-between px-3.5 py-2 hover:bg-[#F8FAFC]">
                                         <span class="flex items-center gap-2.5">
                                             <svg class="w-4 h-4 text-[#6B7280]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="14" x="3" y="5" rx="2"/><circle cx="9" cy="12" r="2"/><path d="M15 10h3"/><path d="M15 14h3"/></svg>

@@ -3,9 +3,11 @@
 namespace App\Providers;
 
 use App\Models\CartItem;
+use App\Models\ModerationReport;
 use App\Models\Order;
 use App\Models\SellerKycVerification;
 use App\Models\User;
+use App\Models\WarrantyClaim;
 use App\Models\WithdrawalRequest;
 use App\Services\ConversationService;
 use App\Services\NotificationService;
@@ -95,6 +97,8 @@ class AppServiceProvider extends ServiceProvider
                 'openDisputes' => $data['openDisputes'] ?? Order::where('status', 'DISPUTED')->count(),
                 'pendingWithdrawals' => $data['pendingWithdrawals'] ?? WithdrawalRequest::where('status', 'PENDING')->count(),
                 'pendingKycs' => $data['pendingKycs'] ?? (Schema::hasTable('seller_kyc_verifications') ? SellerKycVerification::where('status', 'pending')->count() : 0),
+                'openWarrantyClaims' => $data['openWarrantyClaims'] ?? (Schema::hasTable('warranty_claims') ? WarrantyClaim::whereIn('status', ['open', 'investigating'])->count() : 0),
+                'openReports' => $data['openReports'] ?? (Schema::hasTable('moderation_reports') ? ModerationReport::where('status', 'open')->count() : 0),
             ]);
         });
     }

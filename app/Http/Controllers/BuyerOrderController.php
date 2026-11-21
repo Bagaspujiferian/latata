@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PaymentInvoice;
 use App\Models\WalletMutation;
+use App\Models\WarrantyClaim;
 use App\Services\ChatModerationService;
 use App\Services\OrderStateAndSlaService;
 use App\Services\VaultEncryptionService;
@@ -58,6 +59,7 @@ class BuyerOrderController extends Controller
         $order = Order::with([
             'items.product.gameCategory.game',
             'items.vault',
+            'items.flashSaleItem',
             'sellerProfile',
             'seller',
             'buyer',
@@ -65,13 +67,16 @@ class BuyerOrderController extends Controller
             'messages.sender',
             'review',
             'walletMutations',
+            'warranty.claims.resolver',
         ])->where('order_code', $orderCode)->firstOrFail();
 
         if ((int) $order->buyer_id !== (int) $user->id && ! $user->isAdmin()) {
             abort(403);
         }
 
-        return view('buyer.orders.show', compact('order'));
+        $reasonLabels = WarrantyClaim::REASON_LABELS;
+
+        return view('buyer.orders.show', compact('order', 'reasonLabels'));
     }
 
     public function decryptVaultItem(Request $request, string $orderCode, OrderItem $orderItem): JsonResponse

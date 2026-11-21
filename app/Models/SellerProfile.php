@@ -31,6 +31,8 @@ class SellerProfile extends Model
         'is_sla_10m_badge',
         'is_store_open',
         'auto_schedule_enabled',
+        'is_suspended',
+        'suspension_reason',
         'ad_credits',
     ];
 
@@ -45,6 +47,7 @@ class SellerProfile extends Model
             'is_sla_10m_badge' => 'boolean',
             'is_store_open' => 'boolean',
             'auto_schedule_enabled' => 'boolean',
+            'is_suspended' => 'boolean',
             'ad_credits' => 'integer',
         ];
     }
@@ -94,7 +97,7 @@ class SellerProfile extends Model
      */
     public function isCurrentlyOpen(?Carbon $now = null): bool
     {
-        if (! $this->is_store_open) {
+        if ($this->is_suspended || ! $this->is_store_open) {
             return false;
         }
 

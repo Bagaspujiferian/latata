@@ -21,6 +21,8 @@ class Wallet extends Model
         'user_id',
         'pending_balance',
         'available_balance',
+        'security_deposit_balance',
+        'clawback_debt_balance',
         'updated_at',
     ];
 
@@ -30,6 +32,8 @@ class Wallet extends Model
         return [
             'pending_balance' => 'decimal:2',
             'available_balance' => 'decimal:2',
+            'security_deposit_balance' => 'decimal:2',
+            'clawback_debt_balance' => 'decimal:2',
             'updated_at' => 'datetime',
         ];
     }

@@ -6,6 +6,7 @@ use App\Models\CategoryAttribute;
 use App\Models\Game;
 use App\Models\GameCategory;
 use App\Models\Product;
+use App\Services\FlashSaleService;
 use App\Services\ProductCatalogFilterService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -15,6 +16,7 @@ class MarketplaceController extends Controller
 {
     public function __construct(
         private readonly ProductCatalogFilterService $catalogFilterService,
+        private readonly FlashSaleService $flashSaleService,
     ) {}
 
     public function index(Request $request): View
@@ -65,6 +67,8 @@ class MarketplaceController extends Controller
             ? DB::table('wishlists')->where('user_id', $request->user()->id)->pluck('product_id')->map(fn ($id): int => (int) $id)->all()
             : [];
 
+        $activeFlashSale = $this->flashSaleService->getActiveFlashSale();
+
         return view('marketplace.index', compact(
             'games',
             'products',
@@ -81,6 +85,7 @@ class MarketplaceController extends Controller
             'attrFilters',
             'attrsById',
             'wishlistedProductIds',
+            'activeFlashSale',
         ));
     }
 
@@ -135,6 +140,8 @@ class MarketplaceController extends Controller
             ? DB::table('store_followers')->where('user_id', $userId)->where('seller_id', $product->seller_id)->exists()
             : false;
 
+        $activeFlashItem = $this->flashSaleService->getActiveFlashItemForProduct($product->id);
+
         return view('marketplace.show', compact(
             'product',
             'vaultStats',
@@ -142,6 +149,7 @@ class MarketplaceController extends Controller
             'isWishlisted',
             'followersCount',
             'isFollowingStore',
+            'activeFlashItem',
         ));
     }
 }

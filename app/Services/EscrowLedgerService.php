@@ -247,6 +247,144 @@ class EscrowLedgerService
     }
 
     /**
+     * Lock seller funds from available_balance into security_deposit_balance for Anti-Hackback guarantee.
+     *
+     * @return array{debit: WalletMutation, credit: WalletMutation}
+     */
+    public function lockSecurityDeposit(int $sellerId, float $amount, string $referenceSuffix): array
+    {
+        return DB::transaction(function () use ($sellerId, $amount, $referenceSuffix): array {
+            $this->lockWalletsAscending([$sellerId]);
+
+            $debit = $this->mutateLockedWallet(
+                userId: $sellerId,
+                bucket: 'available',
+                direction: 'DEBIT',
+                amount: $amount,
+                mutationType: 'SECURITY_DEPOSIT_LOCK',
+                referenceCode: "DEP-DEBIT-{$referenceSuffix}",
+                description: 'Penguncian saldo aktif ke Deposit Jaminan Anti-Hackback',
+                orderId: null,
+                paymentInvoiceId: null,
+                alreadyLocked: true,
+            );
+
+            $credit = $this->mutateLockedWallet(
+                userId: $sellerId,
+                bucket: 'security_deposit',
+                direction: 'CREDIT',
+                amount: $amount,
+                mutationType: 'SECURITY_DEPOSIT_LOCK',
+                referenceCode: "DEP-CREDIT-{$referenceSuffix}",
+                description: 'Penambahan Deposit Jaminan Anti-Hackback toko',
+                orderId: null,
+                paymentInvoiceId: null,
+                alreadyLocked: true,
+            );
+
+            return ['debit' => $debit, 'credit' => $credit];
+        });
+    }
+
+    /**
+     * Execute post-settlement Hackback Warranty Clawback strictly preserving non-negative wallet balances.
+     * Must be called inside an active transaction or standalone transaction.
+     *
+     * @return array{from_deposit: float, from_available: float, recorded_debt: float, buyer_refund: float}
+     */
+    public function executeWarrantyClawbackAndRefund(
+        int $sellerId,
+        int $buyerId,
+        int $orderId,
+        float $coverageAmount,
+        string $claimCode,
+    ): array {
+        $coverageCents = $this->toCents($coverageAmount);
+        if ($coverageCents <= 0) {
+            throw new FinancialInvariantException('Nilai ganti rugi garansi harus lebih besar dari Rp 0.');
+        }
+
+        return DB::transaction(function () use ($sellerId, $buyerId, $orderId, $coverageCents, $claimCode): array {
+            // Deterministic ascending wallet lock prevents deadlocks between buyer and seller.
+            $this->lockWalletsAscending([$sellerId, $buyerId]);
+
+            $sellerWallet = DB::table('wallets')->where('user_id', $sellerId)->first();
+            if (! $sellerWallet) {
+                throw new FinancialInvariantException("Wallet penjual #{$sellerId} tidak ditemukan.");
+            }
+
+            $depositCents = max(0, $this->toCents((float) $sellerWallet->security_deposit_balance));
+            $availableCents = max(0, $this->toCents((float) $sellerWallet->available_balance));
+
+            $fromDepositCents = min($depositCents, $coverageCents);
+            $remainingAfterDeposit = $coverageCents - $fromDepositCents;
+            $fromAvailableCents = min($availableCents, $remainingAfterDeposit);
+            $debtCents = $coverageCents - $fromDepositCents - $fromAvailableCents;
+
+            if ($fromDepositCents > 0) {
+                $this->mutateLockedWallet(
+                    userId: $sellerId,
+                    bucket: 'security_deposit',
+                    direction: 'DEBIT',
+                    amount: $fromDepositCents / 100,
+                    mutationType: 'WARRANTY_CLAWBACK_DEBIT',
+                    referenceCode: "CLAW-DEP-{$claimCode}",
+                    description: "Clawback Deposit Jaminan untuk klaim garansi {$claimCode}",
+                    orderId: $orderId,
+                    paymentInvoiceId: null,
+                    alreadyLocked: true,
+                );
+            }
+
+            if ($fromAvailableCents > 0) {
+                $this->mutateLockedWallet(
+                    userId: $sellerId,
+                    bucket: 'available',
+                    direction: 'DEBIT',
+                    amount: $fromAvailableCents / 100,
+                    mutationType: 'WARRANTY_CLAWBACK_DEBIT',
+                    referenceCode: "CLAW-AVL-{$claimCode}",
+                    description: "Clawback Saldo Aktif untuk klaim garansi {$claimCode}",
+                    orderId: $orderId,
+                    paymentInvoiceId: null,
+                    alreadyLocked: true,
+                );
+            }
+
+            if ($debtCents > 0) {
+                $currentDebtCents = max(0, $this->toCents((float) $sellerWallet->clawback_debt_balance));
+                DB::table('wallets')
+                    ->where('user_id', $sellerId)
+                    ->update([
+                        'clawback_debt_balance' => $this->fromCents($currentDebtCents + $debtCents),
+                        'updated_at' => now(),
+                    ]);
+            }
+
+            // Platform Guarantee Fund: buyer ALWAYS receives 100% of coverage_amount!
+            $this->mutateLockedWallet(
+                userId: $buyerId,
+                bucket: 'available',
+                direction: 'CREDIT',
+                amount: $coverageCents / 100,
+                mutationType: 'WARRANTY_BUYER_REFUND',
+                referenceCode: "WAR-REF-{$claimCode}",
+                description: "Ganti rugi 100% Garansi Anti-Hackback ({$claimCode})",
+                orderId: $orderId,
+                paymentInvoiceId: null,
+                alreadyLocked: true,
+            );
+
+            return [
+                'from_deposit' => round($fromDepositCents / 100, 2),
+                'from_available' => round($fromAvailableCents / 100, 2),
+                'recorded_debt' => round($debtCents / 100, 2),
+                'buyer_refund' => round($coverageCents / 100, 2),
+            ];
+        });
+    }
+
+    /**
      * @param  list<int>  $userIds
      */
     private function lockWalletsAscending(array $userIds): void
@@ -283,7 +421,7 @@ class EscrowLedgerService
             throw new FinancialInvariantException("Mutation amount must be strictly positive (got {$amount}).");
         }
 
-        if (! in_array($bucket, ['pending', 'available'], true)) {
+        if (! in_array($bucket, ['pending', 'available', 'security_deposit'], true)) {
             throw new FinancialInvariantException("Invalid wallet bucket [{$bucket}].");
         }
 
@@ -304,7 +442,11 @@ class EscrowLedgerService
             return $existing;
         }
 
-        $column = $bucket === 'pending' ? 'pending_balance' : 'available_balance';
+        $column = match ($bucket) {
+            'pending' => 'pending_balance',
+            'security_deposit' => 'security_deposit_balance',
+            default => 'available_balance',
+        };
         $beforeCents = $this->toCents((float) $wallet->{$column});
 
         if ($direction === 'DEBIT') {
@@ -330,9 +472,10 @@ class EscrowLedgerService
             throw new FinancialInvariantException("Negative wallet balance invariant violation on user_id={$userId}.");
         }
 
-        $otherColumn = $bucket === 'pending' ? 'available_balance' : 'pending_balance';
-        if ($this->toCents((float) $wallet->{$otherColumn}) < 0) {
-            throw new FinancialInvariantException("Corrupted negative {$otherColumn} detected on user_id={$userId}.");
+        foreach (['pending_balance', 'available_balance', 'security_deposit_balance'] as $checkCol) {
+            if (property_exists($wallet, $checkCol) && $this->toCents((float) $wallet->{$checkCol}) < 0) {
+                throw new FinancialInvariantException("Corrupted negative {$checkCol} detected on user_id={$userId}.");
+            }
         }
 
         $beforeDecimal = $this->fromCents($beforeCents);

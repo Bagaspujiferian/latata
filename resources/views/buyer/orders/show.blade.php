@@ -38,6 +38,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start"
          x-data="{
             disputeModalOpen: false,
+            warrantyModalOpen: false,
             rating: 5,
             decryptedItems: {},
             decryptErrors: {},
@@ -113,6 +114,11 @@
                         <div class="font-mono-tabular text-lg font-extrabold text-[#111827] mt-1.5">
                             Rp {{ number_format((float) $order->gross_amount, 0, ',', '.') }}
                         </div>
+                        @if((float) $order->seller_discount_amount > 0 || (float) $order->platform_discount_amount > 0)
+                            <div class="font-mono-tabular text-[11px] text-[#047857] mt-0.5">
+                                Bayar Bersih: <strong>Rp {{ number_format($order->refundableBuyerAmount(), 0, ',', '.') }}</strong>
+                            </div>
+                        @endif
                     </div>
                 </div>
 
@@ -338,7 +344,7 @@
                 @endif
             </div>
 
-            {{-- Confirm Order & Rating Card --}}
+                {{-- Confirm Order & Rating Card --}}
             @if(in_array($order->status, ['DELIVERED', 'DISPUTED'], true) && (int) $order->buyer_id === (int) auth()->id())
                 <div class="bg-white border border-[#E4E8EE] rounded-xl p-5 animate-enter" style="--stagger-index: 3">
                     <h3 class="text-sm font-bold text-[#111827]">Konfirmasi Pesanan Selesai &amp; Beri Ulasan</h3>
@@ -367,6 +373,100 @@
                             <span>Konfirmasi Selesai &amp; Cairkan Escrow</span>
                         </button>
                     </form>
+                </div>
+            @endif
+
+            {{-- KARTU SERTIFIKAT GARANSI ANTI-HACKBACK (PHASE 3) --}}
+            @if($order->warranty)
+                @php
+                    $w = $order->warranty;
+                    $wStatusStyle = match ($w->status) {
+                        'active' => 'bg-[#ECFDF5] text-[#047857] border-[#A7F3D0]',
+                        'claimed' => 'bg-[#FFF4ED] text-[#C2410C] border-[#FED7AA]',
+                        'refunded' => 'bg-[#EFF6FF] text-[#0068E1] border-[#BFDBFE]',
+                        default => 'bg-[#F1F5F9] text-[#4B5563] border-[#E4E8EE]',
+                    };
+                @endphp
+                <div class="bg-white border border-[#A7F3D0] rounded-xl overflow-hidden animate-enter" style="--stagger-index: 4">
+                    <div class="px-5 py-3.5 bg-[#ECFDF5] border-b border-[#A7F3D0] flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-8 h-8 rounded-lg bg-[#00AA5B] text-white flex items-center justify-center shrink-0">
+                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+                            </span>
+                            <div>
+                                <h3 class="text-sm font-bold text-[#065F46]">Sertifikat Garansi Anti-Hackback {{ $w->warranty_days }} Hari</h3>
+                                <p class="text-[11px] text-[#047857]">Perlindungan pasca-selesai terhadap penarikan paksa akun oleh pemilik lama.</p>
+                            </div>
+                        </div>
+                        <span class="px-2.5 py-0.5 rounded-full border text-[11px] font-bold uppercase {{ $wStatusStyle }}">
+                            {{ $w->status }}
+                        </span>
+                    </div>
+
+                    <div class="p-5 space-y-4 text-xs">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div class="p-3 rounded-lg bg-[#F8FAFC] border border-[#E4E8EE]">
+                                <div class="text-[10px] text-[#6B7280] uppercase font-semibold">Nilai Pertanggungan</div>
+                                <div class="font-mono-tabular text-sm font-extrabold text-[#047857] mt-0.5">
+                                    Rp {{ number_format((float) $w->coverage_amount, 0, ',', '.') }}
+                                </div>
+                            </div>
+                            <div class="p-3 rounded-lg bg-[#F8FAFC] border border-[#E4E8EE]">
+                                <div class="text-[10px] text-[#6B7280] uppercase font-semibold">Berlaku Hingga</div>
+                                <div class="font-mono-tabular text-xs font-bold text-[#111827] mt-1">
+                                    {{ $w->expires_at?->format('d M Y, H:i') }} WIB
+                                </div>
+                            </div>
+                            <div class="p-3 rounded-lg bg-[#F8FAFC] border border-[#E4E8EE]"
+                                 x-data="liveCountdown('{{ $w->expires_at?->toIso8601String() }}')">
+                                <div class="text-[10px] text-[#6B7280] uppercase font-semibold">Sisa Proteksi</div>
+                                <div class="font-mono-tabular text-xs font-extrabold text-[#0068E1] mt-1" x-text="formatted">--:--:--</div>
+                            </div>
+                        </div>
+
+                        @if($w->claims->isNotEmpty())
+                            <div class="space-y-2">
+                                <div class="text-[11px] font-bold text-[#374151] uppercase tracking-wide">Riwayat Klaim Garansi</div>
+                                @foreach($w->claims as $cl)
+                                    <div class="p-3.5 rounded-xl bg-[#F8FAFC] border border-[#E4E8EE] space-y-1.5">
+                                        <div class="flex flex-wrap items-center justify-between gap-2">
+                                            <span class="font-mono-tabular font-bold text-[#111827]">{{ $cl->claim_code }} &middot; {{ \App\Models\WarrantyClaim::REASON_LABELS[$cl->reason_category] ?? $cl->reason_category }}</span>
+                                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase {{ $cl->status === 'approved_refund' ? 'bg-[#ECFDF5] text-[#047857]' : ($cl->status === 'rejected' ? 'bg-[#FEF2F2] text-[#B91C1C]' : 'bg-[#FFF4ED] text-[#C2410C]') }}">
+                                                {{ $cl->status }}
+                                            </span>
+                                        </div>
+                                        <p class="text-[#4B5563] leading-relaxed">{{ $cl->description }}</p>
+                                        @if(! empty($cl->evidence_paths))
+                                            <div class="flex flex-wrap items-center gap-2 pt-1">
+                                                @foreach($cl->evidence_paths as $evIdx => $evPath)
+                                                    <a href="{{ route('admin.warranties.evidence', [$cl, $evIdx]) }}" target="_blank"
+                                                       class="inline-flex items-center gap-1 px-2 py-1 rounded bg-white border border-[#BFDBFE] text-[#0068E1] text-[10px] font-semibold hover:underline">
+                                                        Bukti Privat #{{ $evIdx + 1 }}
+                                                    </a>
+                                                @endforeach
+                                            </div>
+                                        @endif
+                                        @if($cl->admin_resolution_notes)
+                                            <div class="mt-1.5 pt-1.5 border-t border-[#E4E8EE] text-[11px] text-[#374151]">
+                                                <strong>Keputusan Admin:</strong> {{ $cl->admin_resolution_notes }}
+                                            </div>
+                                        @endif
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endif
+
+                        @if($w->isClaimable() && (int) $order->buyer_id === (int) auth()->id())
+                            <div class="pt-1 flex flex-wrap items-center justify-between gap-2">
+                                <span class="text-[11px] text-[#4B5563]">Akun ditarik balik (hackback) atau email recovery diubah penjual?</span>
+                                <button type="button" @click="warrantyModalOpen = true"
+                                        class="btn-tactile px-4 py-2 rounded-lg bg-[#DC2626] hover:bg-[#B91C1C] text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer">
+                                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+                                    <span>Ajukan Klaim Garansi Hackback</span>
+                                </button>
+                            </div>
+                        @endif
+                    </div>
                 </div>
             @endif
         </div>
@@ -485,5 +585,57 @@
                 </form>
             </div>
         </div>
+
+        {{-- ANTI-HACKBACK WARRANTY CLAIM MODAL (LIGHT MODE) --}}
+        @if($order->warranty && $order->warranty->isClaimable())
+            <div x-show="warrantyModalOpen" x-cloak @keydown.escape.window="warrantyModalOpen = false"
+                 class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-[2px] p-4">
+                <div @click.outside="warrantyModalOpen = false"
+                     class="bg-white border border-[#E4E8EE] shadow-2xl max-w-lg w-full rounded-xl overflow-hidden">
+                    <div class="px-5 py-3.5 bg-[#ECFDF5] border-b border-[#A7F3D0] flex items-center justify-between">
+                        <div>
+                            <h3 class="text-sm font-bold text-[#065F46]">Ajukan Klaim Garansi Anti-Hackback</h3>
+                            <p class="text-[11px] text-[#047857]">Pertanggungan 100% sebesar Rp {{ number_format((float) $order->warranty->coverage_amount, 0, ',', '.') }}</p>
+                        </div>
+                        <button type="button" @click="warrantyModalOpen = false" class="p-1 text-[#047857] hover:text-[#065F46] cursor-pointer">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                        </button>
+                    </div>
+
+                    <form method="POST" action="{{ route('buyer.orders.warranty-claim', $order) }}" enctype="multipart/form-data"
+                          class="p-5 space-y-3.5 text-xs">
+                        @csrf
+                        <div>
+                            <label class="block font-semibold text-[#374151] mb-1">Kategori Kendala Akun *</label>
+                            <select name="reason_category" required
+                                    class="w-full h-9 px-3 bg-[#F8FAFC] border border-[#D1D5DB] rounded-lg focus:bg-white focus:border-[#0068E1] focus:outline-none">
+                                @foreach($reasonLabels as $rk => $rl)
+                                    <option value="{{ $rk }}">{{ $rl }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block font-semibold text-[#374151] mb-1">Kronologi Detail *</label>
+                            <textarea name="description" rows="4" required minlength="10"
+                                      placeholder="Jelaskan kronologi email recovery / password ditarik ulang atau akun terkena banned..."
+                                      class="w-full px-3 py-2 bg-[#F8FAFC] border border-[#D1D5DB] rounded-lg focus:bg-white focus:border-[#0068E1] focus:outline-none"></textarea>
+                        </div>
+
+                        <div>
+                            <label class="block font-semibold text-[#374151] mb-1">Unggah Bukti Screenshot Privat (JPG/PNG/WEBP, maks 3MB)</label>
+                            <input type="file" name="evidence[]" multiple accept="image/jpeg,image/png,image/webp"
+                                   class="w-full text-xs text-[#4B5563] file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-[#BFDBFE] file:bg-[#EFF6FF] file:text-[#0068E1] file:font-semibold file:cursor-pointer">
+                            <p class="text-[10px] text-[#6B7280] mt-1">Bukti disimpan terenkripsi pada penyimpanan privat (hanya dapat dilihat Anda &amp; Admin Risiko).</p>
+                        </div>
+
+                        <div class="flex items-center justify-end gap-2 pt-2">
+                            <button type="button" @click="warrantyModalOpen = false" class="btn-tactile px-4 py-2 rounded-lg border border-[#E4E8EE] text-[#4B5563] font-semibold cursor-pointer">Batal</button>
+                            <button type="submit" class="btn-tactile px-4 py-2 rounded-lg bg-[#DC2626] hover:bg-[#B91C1C] text-white font-bold cursor-pointer">Kirim Klaim Garansi</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        @endif
     </div>
 @endsection

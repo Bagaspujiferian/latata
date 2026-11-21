@@ -11,6 +11,8 @@
         $isOwnProduct = auth()->check() && (int) $product->seller_id === (int) auth()->id();
         $storeEffectiveOpen = $product->sellerProfile ? $product->sellerProfile->isOpenForManualTradeNow() : true;
         $isClosedManual = $deliveryMethod === 'manual_trade' && ! $storeEffectiveOpen;
+        $hasActiveFlash = isset($activeFlashItem) && $activeFlashItem && $activeFlashItem->remainingQuota() > 0;
+        $effectiveUnitPrice = $hasActiveFlash ? (float) $activeFlashItem->flash_price : (float) $product->price;
 
         $galleryUrls = $product->images->isNotEmpty()
             ? $product->images->map(fn ($img) => ['url' => $img->publicUrl(), 'alt' => $img->alt_text ?? $product->title])->values()->all()
@@ -23,17 +25,18 @@
             gallery: @js($galleryUrls),
             activePhotoIdx: 0,
             lightboxOpen: false,
+            reportModalOpen: false,
             wishlisted: {{ $isWishlisted ? 'true' : 'false' }},
             wishlistCount: {{ (int) ($product->wishlisted_by_count ?? 0) }},
             followingStore: {{ $isFollowingStore ? 'true' : 'false' }},
             followersCount: {{ (int) $followersCount }},
             qty: {{ max(1, (int) $product->min_order) }},
-            unitPrice: {{ (float) $product->price }},
+            unitPrice: {{ $effectiveUnitPrice }},
             actionMode: 'instant_buy',
             submittingAction: null,
             paymentMode: 'wallet_full',
             paymentChannel: 'qris',
-            walletAmount: {{ min(25000, max(0, floor(((float) $product->price) / 2))) }},
+            walletAmount: {{ min(25000, max(0, floor($effectiveUnitPrice / 2))) }},
             gameInputs: {
                 @foreach($schema as $f)
                     '{{ $f['key'] }}': '{{ old('game_inputs.' . $f['key'], '') }}',
@@ -242,15 +245,31 @@
                 @endif
 
                 {{-- Safe Trading Guarantee Box --}}
-                <div class="bg-[#ECFDF5] border border-[#A7F3D0] rounded-xl p-4 space-y-1.5 text-xs text-[#047857]">
+                <div class="bg-[#ECFDF5] border border-[#A7F3D0] rounded-xl p-4 space-y-2 text-xs text-[#047857]">
                     <div class="flex items-center gap-1.5 font-bold text-[#065F46]">
                         <svg class="w-4 h-4 text-[#00AA5B] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
                         <span>Garansi Safe Trading Escrow</span>
                     </div>
                     <p class="text-[11px] leading-relaxed text-[#047857]">
-                        Dana Anda ditahan aman oleh NexaTrade dan baru diteruskan ke penjual setelah barang diterima sesuai deskripsi atau melewati garansi 24 jam.
+                        Dana Anda ditahan aman selama <strong class="font-mono-tabular">{{ $category->escrow_hold_hours ?? 24 }} jam</strong> setelah pengiriman sebelum dilepaskan ke penjual.
                     </p>
+                    @if(($category->warranty_days ?? 0) > 0)
+                        <div class="pt-2 border-t border-[#A7F3D0] flex items-center gap-1.5 text-[11px] font-bold text-[#065F46]">
+                            <svg class="w-3.5 h-3.5 text-[#00AA5B] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>
+                            <span>Termasuk Garansi Anti-Hackback {{ $category->warranty_days }} Hari</span>
+                        </div>
+                    @endif
                 </div>
+
+                @auth
+                    @if(! $isOwnProduct)
+                        <button type="button" @click="reportModalOpen = true"
+                                class="btn-tactile w-full py-2 px-3 rounded-lg bg-white hover:bg-[#FEF2F2] border border-[#E4E8EE] hover:border-[#FECACA] text-[#6B7280] hover:text-[#DC2626] text-xs font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer">
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/></svg>
+                            <span>Laporkan Produk</span>
+                        </button>
+                    @endif
+                @endauth
             </div>
 
             {{-- CENTER COLUMN (5/12): TITLE, WISHLIST, SPECS, DYNAMIC INPUTS + NICKNAME, REVIEWS --}}
@@ -282,6 +301,20 @@
                                     <span>10 Menit Kirim</span>
                                 </span>
                             @endif
+
+                            @if(($category->warranty_days ?? 0) > 0)
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#ECFDF5] text-[#047857] border border-[#A7F3D0] text-[11px] font-bold">
+                                    <svg class="w-3.5 h-3.5 text-[#00AA5B]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+                                    <span>Garansi Anti-Hackback {{ $category->warranty_days }} Hari</span>
+                                </span>
+                            @endif
+
+                            @if($hasActiveFlash)
+                                <span class="badge-live-pulse inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#F05A28] text-white text-[11px] font-bold">
+                                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                                    <span>Flash Sale Aktif</span>
+                                </span>
+                            @endif
                         </div>
 
                         @auth
@@ -308,19 +341,51 @@
                         </div>
                     </div>
 
-                    <div class="pt-2 border-t border-[#F1F5F9] flex items-baseline justify-between">
-                        <div>
-                            <div class="text-[11px] text-[#6B7280]">Harga Satuan</div>
-                            <div class="text-2xl font-extrabold text-[#F05A28] tabular-nums-clean">
-                                Rp {{ number_format((float) $product->price, 0, ',', '.') }}
+                    <div class="pt-2 border-t border-[#F1F5F9] space-y-2.5">
+                        @if($hasActiveFlash)
+                            <div class="p-3 rounded-xl bg-[#FFF4ED] border border-[#FED7AA] space-y-2">
+                                <div class="flex flex-wrap items-center justify-between gap-2">
+                                    <span class="text-xs font-extrabold text-[#C2410C] inline-flex items-center gap-1">
+                                        <svg class="w-3.5 h-3.5 text-[#F05A28]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                                        <span>{{ $activeFlashItem->flashSale->title }}</span>
+                                    </span>
+                                    <span class="font-mono-tabular text-[11px] font-bold px-2 py-0.5 rounded bg-[#F05A28] text-white"
+                                          x-data="liveCountdown('{{ $activeFlashItem->flashSale->ends_at->toIso8601String() }}')"
+                                          x-text="formatted">--:--:--</span>
+                                </div>
+                                <div class="flex items-baseline justify-between gap-2">
+                                    <div class="flex items-baseline gap-2.5 font-mono-tabular">
+                                        <span class="text-2xl font-extrabold text-[#F05A28]">
+                                            Rp {{ number_format((float) $activeFlashItem->flash_price, 0, ',', '.') }}
+                                        </span>
+                                        <span class="text-xs text-[#6B7280] line-through">
+                                            Rp {{ number_format((float) $product->price, 0, ',', '.') }}
+                                        </span>
+                                    </div>
+                                    <span class="text-[11px] font-mono-tabular font-bold text-[#C2410C]">
+                                        Sisa Kuota {{ $activeFlashItem->remainingQuota() }}/{{ $activeFlashItem->flash_quota }} (Maks {{ $activeFlashItem->max_qty_per_user }}/akun)
+                                    </span>
+                                </div>
+                                <div class="h-1.5 w-full rounded-full bg-white overflow-hidden">
+                                    <div class="h-full rounded-full bg-[#F05A28]" style="width: {{ min(100, max(8, $activeFlashItem->quotaProgressPercent())) }}%"></div>
+                                </div>
                             </div>
-                        </div>
-                        <div class="text-right text-xs">
-                            <div class="text-[#6B7280]">Stok Tersedia</div>
-                            <div class="font-mono-tabular font-bold {{ $product->stock > 0 ? 'text-[#047857]' : 'text-[#DC2626]' }}">
-                                {{ $product->stock }} Unit
+                        @else
+                            <div class="flex items-baseline justify-between">
+                                <div>
+                                    <div class="text-[11px] text-[#6B7280]">Harga Satuan</div>
+                                    <div class="text-2xl font-extrabold text-[#F05A28] tabular-nums-clean">
+                                        Rp {{ number_format((float) $product->price, 0, ',', '.') }}
+                                    </div>
+                                </div>
+                                <div class="text-right text-xs">
+                                    <div class="text-[#6B7280]">Stok Tersedia</div>
+                                    <div class="font-mono-tabular font-bold {{ $product->stock > 0 ? 'text-[#047857]' : 'text-[#DC2626]' }}">
+                                        {{ $product->stock }} Unit
+                                    </div>
+                                </div>
                             </div>
-                        </div>
+                        @endif
                     </div>
 
                     {{-- Structured Typed Specifications & Attributes Grid --}}
@@ -613,5 +678,52 @@
                 </div>
             </div>
         </div>
+
+        {{-- Laporkan Produk Modal (Standalone Outside Cart Form) --}}
+        @auth
+            @if(! $isOwnProduct)
+                <div x-show="reportModalOpen" x-cloak @keydown.escape.window="reportModalOpen = false"
+                     class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-[2px] p-4">
+                    <div @click.outside="reportModalOpen = false" class="bg-white border border-[#E4E8EE] shadow-2xl max-w-md w-full rounded-xl overflow-hidden">
+                        <div class="px-5 py-3.5 bg-[#FEF2F2] border-b border-[#FECACA] flex items-center justify-between gap-2">
+                            <div>
+                                <h3 class="text-sm font-bold text-[#991B1B]">Laporkan Produk Ini</h3>
+                                <p class="text-[11px] text-[#B91C1C]">Laporan diteruskan langsung ke Tim Trust &amp; Safety NexaTrade.</p>
+                            </div>
+                            <button type="button" @click="reportModalOpen = false" class="p-1 text-[#B91C1C] hover:text-[#7F1D1D] cursor-pointer">
+                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                            </button>
+                        </div>
+                        <form method="POST" action="{{ route('reports.store') }}" class="p-5 space-y-3.5 text-xs">
+                            @csrf
+                            <input type="hidden" name="target_type" value="product">
+                            <input type="hidden" name="target_id" value="{{ $product->id }}">
+
+                            <div>
+                                <label class="block font-semibold text-[#374151] mb-1">Kategori Pelanggaran *</label>
+                                <select name="reason_category" required
+                                        class="w-full h-9 px-3 bg-[#F8FAFC] border border-[#D1D5DB] rounded-lg focus:bg-white focus:border-[#DC2626] focus:outline-none">
+                                    @foreach(\App\Models\ModerationReport::REASON_LABELS as $rKey => $rLabel)
+                                        <option value="{{ $rKey }}">{{ $rLabel }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block font-semibold text-[#374151] mb-1">Detail Laporan *</label>
+                                <textarea name="details" rows="3" required minlength="10"
+                                          placeholder="Jelaskan indikasi pelanggaran, penipuan, atau ketidaksesuaian produk..."
+                                          class="w-full px-3 py-2 bg-[#F8FAFC] border border-[#D1D5DB] rounded-lg focus:bg-white focus:border-[#DC2626] focus:outline-none"></textarea>
+                            </div>
+
+                            <div class="flex items-center justify-end gap-2 pt-1">
+                                <button type="button" @click="reportModalOpen = false" class="btn-tactile px-3.5 py-2 rounded-lg border border-[#E4E8EE] text-[#4B5563] font-semibold cursor-pointer">Batal</button>
+                                <button type="submit" class="btn-tactile px-4 py-2 rounded-lg bg-[#DC2626] hover:bg-[#B91C1C] text-white font-bold cursor-pointer">Kirim Laporan</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            @endif
+        @endauth
     </div>
 @endsection

@@ -15,6 +15,7 @@ class OrderFulfillmentDispatcher
         private readonly SellerSlaMetricsService $slaMetricsService,
         private readonly ChatModerationService $chatModerationService,
         private readonly NotificationService $notificationService,
+        private readonly AccountWarrantyService $warrantyService,
     ) {}
 
     /**
@@ -87,7 +88,13 @@ class OrderFulfillmentDispatcher
                 }
             }
 
-            $autoCompleteAt = $now->copy()->addHours((int) config('nexatrade.auto_complete_hours', 24));
+            $holdHours = (int) (DB::table('order_items')
+                ->join('products', 'products.id', '=', 'order_items.product_id')
+                ->join('game_categories', 'game_categories.id', '=', 'products.game_category_id')
+                ->where('order_items.order_id', $orderRow->id)
+                ->max('game_categories.escrow_hold_hours') ?: config('nexatrade.auto_complete_hours', 24));
+
+            $autoCompleteAt = $now->copy()->addHours(max(1, $holdHours));
             DB::table('orders')->where('id', $orderRow->id)->update([
                 'status' => 'DELIVERED',
                 'delivered_at' => $now,
@@ -103,7 +110,8 @@ class OrderFulfillmentDispatcher
 
             $this->slaMetricsService->recalculateSellerSla((int) $orderRow->seller_id);
 
-            $freshOrder = Order::with(['items', 'paymentInvoice'])->findOrFail($orderRow->id);
+            $freshOrder = Order::with(['items.product.gameCategory', 'paymentInvoice'])->findOrFail($orderRow->id);
+            $this->warrantyService->issueWarrantyIfEligible($freshOrder);
             $this->chatModerationService->postOrderMessage(
                 order: $freshOrder,
                 sender: $sellerUser,

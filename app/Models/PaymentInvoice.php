@@ -13,6 +13,8 @@ class PaymentInvoice extends Model
         'invoice_code',
         'buyer_id',
         'subtotal_amount',
+        'seller_discount_total',
+        'platform_discount_total',
         'gateway_fee',
         'wallet_used_amount',
         'grand_total',
@@ -29,6 +31,8 @@ class PaymentInvoice extends Model
     {
         return [
             'subtotal_amount' => 'decimal:2',
+            'seller_discount_total' => 'decimal:2',
+            'platform_discount_total' => 'decimal:2',
             'gateway_fee' => 'decimal:2',
             'wallet_used_amount' => 'decimal:2',
             'grand_total' => 'decimal:2',

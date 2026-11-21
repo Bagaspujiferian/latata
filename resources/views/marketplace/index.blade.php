@@ -41,6 +41,94 @@
         </section>
 
         {{-- ===================================================================== --}}
+        {{-- FLASH SALE STRIP (LIVE COUNTDOWN + QUOTA BAR)                         --}}
+        {{-- ===================================================================== --}}
+        @if(isset($activeFlashSale) && $activeFlashSale && $activeFlashSale->items->isNotEmpty())
+            <section class="mb-5 bg-white border border-[#FED7AA] rounded-xl overflow-hidden animate-enter" style="--stagger-index: 0">
+                <div class="px-4 py-3 bg-[#FFF4ED] border-b border-[#FED7AA] flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <span class="w-8 h-8 rounded-lg bg-[#F05A28] text-white flex items-center justify-center shrink-0">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                        </span>
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2">
+                                <h2 class="text-sm font-extrabold text-[#111827] truncate">{{ $activeFlashSale->title }}</h2>
+                                <span class="badge-live-pulse px-2 py-0.5 rounded-full bg-[#F05A28] text-white text-[10px] font-bold uppercase tracking-wide shrink-0">Flash Sale</span>
+                            </div>
+                            @if($activeFlashSale->banner_subtitle)
+                                <p class="text-[11px] text-[#9A3412] truncate">{{ $activeFlashSale->banner_subtitle }}</p>
+                            @endif
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2 shrink-0"
+                         x-data="liveCountdown('{{ $activeFlashSale->ends_at->toIso8601String() }}')">
+                        <span class="text-[11px] font-semibold text-[#9A3412]">Berakhir dalam</span>
+                        <span class="font-mono-tabular px-2.5 py-1 rounded-lg bg-[#F05A28] text-white text-xs font-extrabold tracking-wide"
+                              x-text="formatted">--:--:--</span>
+                    </div>
+                </div>
+
+                <div class="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                    @foreach($activeFlashSale->items as $fItem)
+                        @php
+                            $fProd = $fItem->product;
+                            if (! $fProd || ! $fProd->is_active) {
+                                continue;
+                            }
+                            $origPrice = (float) $fProd->price;
+                            $flashPrice = (float) $fItem->flash_price;
+                            $discPct = $origPrice > 0 ? (int) round((($origPrice - $flashPrice) / $origPrice) * 100) : 0;
+                            $remaining = $fItem->remainingQuota();
+                            $usedPct = $fItem->quotaProgressPercent();
+                            $thumbUrl = $fProd->images->first()?->publicUrl() ?? $fProd->gameCategory?->game?->thumbnail_url;
+                        @endphp
+                        <a href="{{ route('marketplace.show', $fProd->slug) }}"
+                           class="card-elevate group bg-white border border-[#E4E8EE] hover:border-[#F05A28] rounded-xl p-3 flex items-center gap-3.5 transition-colors">
+                            <div class="relative w-24 h-20 rounded-lg overflow-hidden bg-[#F1F5F9] border border-[#E4E8EE] shrink-0">
+                                <img src="{{ $thumbUrl }}" alt="{{ $fProd->title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                                @if($discPct > 0)
+                                    <span class="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-[#DC2626] text-white font-mono-tabular text-[10px] font-extrabold">-{{ $discPct }}%</span>
+                                @endif
+                            </div>
+
+                            <div class="min-w-0 flex-1 space-y-1.5">
+                                <div class="text-[10px] font-semibold text-[#6B7280] truncate">
+                                    {{ $fProd->gameCategory?->game?->name }} &middot; {{ $fProd->sellerProfile?->store_name }}
+                                </div>
+                                <div class="text-xs font-bold text-[#111827] group-hover:text-[#0068E1] line-clamp-1">
+                                    {{ $fProd->title }}
+                                </div>
+
+                                <div class="flex items-baseline gap-2 font-mono-tabular">
+                                    <span class="text-sm font-extrabold text-[#F05A28]">
+                                        Rp {{ number_format($flashPrice, 0, ',', '.') }}
+                                    </span>
+                                    <span class="text-[11px] text-[#6B7280] line-through">
+                                        Rp {{ number_format($origPrice, 0, ',', '.') }}
+                                    </span>
+                                </div>
+
+                                <div class="space-y-1">
+                                    <div class="h-1.5 w-full rounded-full bg-[#F1F5F9] overflow-hidden">
+                                        <div class="h-full rounded-full {{ $remaining > 0 ? 'bg-[#F05A28]' : 'bg-[#9CA3AF]' }}"
+                                             style="width: {{ min(100, max(8, $usedPct)) }}%"></div>
+                                    </div>
+                                    <div class="flex items-center justify-between text-[10px] font-mono-tabular">
+                                        <span class="{{ $remaining > 0 ? 'text-[#C2410C] font-bold' : 'text-[#6B7280]' }}">
+                                            {{ $remaining > 0 ? "Tersisa {$remaining} dari {$fItem->flash_quota}" : 'Kuota Habis' }}
+                                        </span>
+                                        <span class="text-[#6B7280]">Maks {{ $fItem->max_qty_per_user }}/akun</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                    @endforeach
+                </div>
+            </section>
+        @endif
+
+        {{-- ===================================================================== --}}
         {{-- COMPACT GAME SILO SELECTOR ROW                                        --}}
         {{-- ===================================================================== --}}
         <section class="mb-4 animate-enter" style="--stagger-index: 1">

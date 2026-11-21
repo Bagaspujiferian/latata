@@ -22,6 +22,9 @@ class OrderStateAndSlaService
         private readonly SellerSlaMetricsService $slaMetricsService,
         private readonly ChatModerationService $chatModerationService,
         private readonly NotificationService $notificationService,
+        private readonly AccountWarrantyService $warrantyService,
+        private readonly VoucherAccountingService $voucherService,
+        private readonly FlashSaleService $flashSaleService,
     ) {}
 
     public function sellerSubmitManualDelivery(
@@ -43,7 +46,12 @@ class OrderStateAndSlaService
             StateTransitionGuard::assertOrderTransition($orderRow->status, 'DELIVERED', "Manual Delivery {$orderRow->order_code}");
 
             $now = now();
-            $autoCompleteAt = $now->copy()->addHours((int) config('nexatrade.auto_complete_hours', 24));
+            $holdHours = (int) (DB::table('order_items')
+                ->join('products', 'products.id', '=', 'order_items.product_id')
+                ->join('game_categories', 'game_categories.id', '=', 'products.game_category_id')
+                ->where('order_items.order_id', $orderId)
+                ->max('game_categories.escrow_hold_hours') ?: config('nexatrade.auto_complete_hours', 24));
+            $autoCompleteAt = $now->copy()->addHours(max(1, $holdHours));
             $proof = [
                 'type' => 'manual_trade_proof',
                 'notes' => trim($deliveryNotes),
@@ -62,7 +70,8 @@ class OrderStateAndSlaService
 
             $this->slaMetricsService->recalculateSellerSla($sellerId);
 
-            $order = Order::with(['items', 'paymentInvoice'])->findOrFail($orderId);
+            $order = Order::with(['items.product.gameCategory', 'paymentInvoice'])->findOrFail($orderId);
+            $this->warrantyService->issueWarrantyIfEligible($order);
             $seller = User::findOrFail($sellerId);
 
             $this->chatModerationService->postOrderMessage(
@@ -135,12 +144,13 @@ class OrderStateAndSlaService
 
             $this->slaMetricsService->recalculateSellerSla((int) $order->seller_id);
 
+            $buyerRefundAmount = $order->refundableBuyerAmount();
             $this->ledgerService->refundEscrowToBuyer(
                 sellerId: (int) $order->seller_id,
                 buyerId: (int) $order->buyer_id,
                 orderId: (int) $order->id,
                 sellerEscrowAmount: (float) $order->seller_escrow_amount,
-                buyerRefundAmount: (float) $order->gross_amount,
+                buyerRefundAmount: $buyerRefundAmount,
                 orderCode: $order->order_code,
                 reason: 'Klaim Refund Otomatis Pelanggaran SLA',
             );
@@ -149,7 +159,7 @@ class OrderStateAndSlaService
             $this->chatModerationService->postOrderMessage(
                 order: $order,
                 sender: $buyer,
-                rawMessage: '[REFUND SLA OTOMATIS] Penjual melewati target SLA. Pesanan dibatalkan dan 100% dana Rp '.number_format((float) $order->gross_amount, 0, ',', '.').' langsung masuk ke Saldo Aktif Pembeli.',
+                rawMessage: '[REFUND SLA OTOMATIS] Penjual melewati target SLA. Pesanan dibatalkan dan dana Rp '.number_format($buyerRefundAmount, 0, ',', '.').' langsung masuk ke Saldo Aktif Pembeli.',
                 senderRoleOverride: 'system',
             );
 
@@ -321,21 +331,23 @@ class OrderStateAndSlaService
             DB::table('seller_profiles')->where('user_id', $orderRow->seller_id)->increment('total_cancelled_orders');
             $this->slaMetricsService->recalculateSellerSla((int) $orderRow->seller_id);
 
+            $order = Order::with(['items', 'messages'])->findOrFail($orderId);
+            $buyerRefundAmount = $order->refundableBuyerAmount();
+
             $this->ledgerService->refundEscrowToBuyer(
                 sellerId: (int) $orderRow->seller_id,
                 buyerId: (int) $orderRow->buyer_id,
                 orderId: (int) $orderRow->id,
                 sellerEscrowAmount: (float) $orderRow->seller_escrow_amount,
-                buyerRefundAmount: (float) $orderRow->gross_amount,
+                buyerRefundAmount: $buyerRefundAmount,
                 orderCode: $orderRow->order_code,
                 reason: "Putusan Arbitrase Admin: {$adminNotes}",
             );
 
-            $order = Order::with(['items', 'messages'])->findOrFail($orderId);
             $this->chatModerationService->postOrderMessage(
                 order: $order,
                 sender: $admin,
-                rawMessage: "[PUTUSAN ARBITRASE: MENANGKAN PEMBELI] {$adminNotes}. Dana Rp ".number_format((float) $order->gross_amount, 0, ',', '.').' dikembalikan 100% ke Saldo Aktif Pembeli.',
+                rawMessage: "[PUTUSAN ARBITRASE: MENANGKAN PEMBELI] {$adminNotes}. Dana Rp ".number_format($buyerRefundAmount, 0, ',', '.').' dikembalikan ke Saldo Aktif Pembeli.',
                 senderRoleOverride: 'admin',
             );
 
@@ -423,6 +435,7 @@ class OrderStateAndSlaService
         }
 
         $releasedVaultCount = 0;
+        $releasedFlashQty = 0;
         $vaultProductsToSync = [];
         $cancelledOrders = [];
 
@@ -436,6 +449,8 @@ class OrderStateAndSlaService
                     'cancelled_reason' => mb_substr($reason, 0, 255),
                     'updated_at' => now(),
                 ]);
+
+            $releasedFlashQty += $this->flashSaleService->releaseFlashQuotaForCancelledOrder((int) $order->id);
 
             if ($order->delivery_method === 'instant_vault') {
                 $released = DB::table('product_vaults')
@@ -468,6 +483,9 @@ class OrderStateAndSlaService
             $this->vaultService->syncVaultStockWithinLock((int) $vaultProductId);
         }
 
+        // Release reserved voucher quotas & usages when unpaid invoice expires.
+        $releasedVoucherCount = $this->voucherService->releaseVouchersForExpiredInvoice((int) $invoice->id);
+
         // HYBRID PAYMENT ROLLBACK LAW (#6): refund wallet_used_amount automatically!
         $hybridRefundRef = null;
         $hybridRefundedAmount = 0.00;
@@ -487,6 +505,8 @@ class OrderStateAndSlaService
             'new_status' => 'EXPIRED',
             'cancelled_orders' => $cancelledOrders,
             'released_vault_count' => $releasedVaultCount,
+            'released_flash_qty' => $releasedFlashQty,
+            'released_voucher_count' => $releasedVoucherCount,
             'hybrid_refund_amount' => $hybridRefundedAmount,
             'hybrid_refund_ref' => $hybridRefundRef,
         ];
@@ -731,6 +751,7 @@ class OrderStateAndSlaService
         );
 
         $this->slaMetricsService->recalculateSellerSla((int) $order->seller_id);
+        $this->warrantyService->issueWarrantyIfEligible($order);
 
         $seller = User::findOrFail((int) $order->seller_id);
         $this->chatModerationService->postOrderMessage(

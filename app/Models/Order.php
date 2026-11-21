@@ -16,6 +16,9 @@ class Order extends Model
         'buyer_id',
         'seller_id',
         'gross_amount',
+        'seller_discount_amount',
+        'platform_discount_amount',
+        'buyer_payable_amount',
         'platform_commission',
         'seller_escrow_amount',
         'delivery_method',
@@ -38,6 +41,9 @@ class Order extends Model
     {
         return [
             'gross_amount' => 'decimal:2',
+            'seller_discount_amount' => 'decimal:2',
+            'platform_discount_amount' => 'decimal:2',
+            'buyer_payable_amount' => 'decimal:2',
             'platform_commission' => 'decimal:2',
             'seller_escrow_amount' => 'decimal:2',
             'buyer_game_inputs' => 'array',
@@ -89,6 +95,32 @@ class Order extends Model
     public function walletMutations(): HasMany
     {
         return $this->hasMany(WalletMutation::class);
+    }
+
+    public function warranty(): HasOne
+    {
+        return $this->hasOne(OrderWarranty::class);
+    }
+
+    public function warrantyClaims(): HasMany
+    {
+        return $this->hasMany(WarrantyClaim::class)->orderByDesc('id');
+    }
+
+    /**
+     * Anti-Farming Subsidy Refund Law:
+     * Return buyer_payable_amount when explicitly recorded (or discounted), falling back safely to gross_amount for legacy orders.
+     */
+    public function refundableBuyerAmount(): float
+    {
+        $payable = (float) $this->buyer_payable_amount;
+        $hasDiscount = (float) $this->seller_discount_amount > 0 || (float) $this->platform_discount_amount > 0;
+
+        if ($payable > 0 || $hasDiscount) {
+            return round(max(0.0, $payable), 2);
+        }
+
+        return round((float) $this->gross_amount, 2);
     }
 
     public function isSlaBreached(): bool

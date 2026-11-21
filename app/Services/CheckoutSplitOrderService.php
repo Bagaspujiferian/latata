@@ -23,12 +23,15 @@ class CheckoutSplitOrderService
         private readonly EscrowLedgerService $ledgerService,
         private readonly VaultEncryptionService $vaultService,
         private readonly OrderFulfillmentDispatcher $fulfillmentDispatcher,
+        private readonly VoucherAccountingService $voucherService,
+        private readonly FlashSaleService $flashSaleService,
     ) {}
 
     /**
      * Checkout either from user's cart OR from an explicit single/multi instant-buy item array.
      *
      * @param  list<array{product_id: int, quantity: int, buyer_game_inputs?: array<string, mixed>, verified_game_nickname?: ?string}>|null  $explicitItems
+     * @param  array<int, string>  $sellerVoucherCodes
      */
     public function checkout(
         int $buyerId,
@@ -37,6 +40,8 @@ class CheckoutSplitOrderService
         ?float $requestedWalletAmount = null,
         ?array $explicitItems = null,
         bool $clearCart = true,
+        ?string $platformVoucherCode = null,
+        array $sellerVoucherCodes = [],
     ): PaymentInvoice {
         if (! in_array($paymentMode, ['gateway_only', 'wallet_full', 'hybrid_wallet_gateway'], true)) {
             throw new DomainException("Mode pembayaran tidak valid: [{$paymentMode}].");
@@ -49,6 +54,8 @@ class CheckoutSplitOrderService
             $requestedWalletAmount,
             $explicitItems,
             $clearCart,
+            $platformVoucherCode,
+            $sellerVoucherCodes,
         ): PaymentInvoice {
             $rawItems = $this->resolveItems($buyerId, $explicitItems);
 
@@ -103,8 +110,15 @@ class CheckoutSplitOrderService
                 $category = $product->gameCategory;
                 $deliveryMethod = $category->delivery_method;
 
+                // SUSPENDED STORE GUARD: suspended stores cannot accept ANY transactions (including instant_vault/api_h2h)
+                if ($product->sellerProfile && $product->sellerProfile->is_suspended) {
+                    throw new StoreClosedException(
+                        "Toko {$product->sellerProfile->store_name} sedang dibekukan sementara oleh Tim Risiko NexaTrade."
+                    );
+                }
+
                 // STORE OPEN & AUTO-SCHEDULE GUARD: manual_trade blocked when closed; instant_vault & api_h2h stay 24/7.
-                if ($deliveryMethod === 'manual_trade' && $product->sellerProfile && ! $product->sellerProfile->isOpenForManualTradeNow()) {
+                if ($deliveryMethod === 'manual_trade' && $product->sellerProfile && ! $product->sellerProfile->isCurrentlyOpen()) {
                     throw new StoreClosedException(
                         "Toko {$product->sellerProfile->store_name} sedang TUTUP atau di luar jam operasional untuk produk manual trade ({$product->title}). Produk Brankas Instan & H2H tetap tersedia 24/7."
                     );
@@ -125,13 +139,24 @@ class CheckoutSplitOrderService
                     );
                 }
 
+                // Resolve & lock active Flash Sale price (atomic quota + per-user limit, graceful fallback to regular price)
+                $regularPrice = (float) $lockedRow->price;
+                $flashLock = $this->flashSaleService->resolveAndLockFlashPriceForCheckout(
+                    productId: $pid,
+                    buyerId: $buyerId,
+                    quantity: $qty,
+                    regularPrice: $regularPrice,
+                );
+
                 $validatedItems[] = [
                     'product' => $product,
                     'locked_row' => $lockedRow,
                     'delivery_method' => $deliveryMethod,
                     'fee_percent' => (float) $category->platform_fee_percent,
                     'quantity' => $qty,
-                    'unit_price' => (float) $lockedRow->price,
+                    'unit_price' => $flashLock ? $flashLock['unit_price'] : $regularPrice,
+                    'flash_sale_item_id' => $flashLock ? $flashLock['flash_sale_item_id'] : null,
+                    'original_unit_price' => $flashLock ? $flashLock['original_unit_price'] : null,
                     'buyer_game_inputs' => $inputs,
                     'verified_game_nickname' => $entry['verified_game_nickname'] ?? null,
                 ];
@@ -234,7 +259,21 @@ class CheckoutSplitOrderService
 
             $subtotalAmount = round($subtotalAmount, 2);
 
-            // Compute payment split: wallet_full vs hybrid_wallet_gateway vs gateway_only.
+            // Apply Seller & Platform Vouchers atomically with ascending voucher row locks & Anti-Farming subsidy accounting.
+            $voucherResult = $this->voucherService->reserveVouchersForCheckout(
+                buyerId: $buyerId,
+                preparedOrders: $preparedOrders,
+                platformVoucherCode: $platformVoucherCode,
+                sellerVoucherCodesBySellerId: $sellerVoucherCodes,
+            );
+            $preparedOrders = $voucherResult['orders'];
+            $sellerDiscountTotal = $voucherResult['seller_discount_total'];
+            $platformDiscountTotal = $voucherResult['platform_discount_total'];
+            $usagesToCreate = $voucherResult['usages_to_create'];
+
+            $buyerPayableSubtotal = round(max(0.0, $subtotalAmount - $sellerDiscountTotal - $platformDiscountTotal), 2);
+
+            // Compute payment split: wallet_full vs hybrid_wallet_gateway vs gateway_only against buyerPayableSubtotal.
             $buyerWallet = DB::table('wallets')->where('user_id', $buyerId)->lockForUpdate()->first();
             $buyerAvailable = $buyerWallet ? (float) $buyerWallet->available_balance : 0.00;
 
@@ -243,12 +282,12 @@ class CheckoutSplitOrderService
             $resolvedChannel = $paymentChannel;
 
             if ($paymentMode === 'wallet_full') {
-                if ($buyerAvailable < $subtotalAmount) {
+                if ($buyerAvailable < $buyerPayableSubtotal) {
                     throw new InsufficientWalletBalanceException(
-                        'Saldo Dompet tidak mencukupi untuk pembayaran penuh (tersedia Rp '.number_format($buyerAvailable, 0, ',', '.').', tagihan Rp '.number_format($subtotalAmount, 0, ',', '.').').'
+                        'Saldo Dompet tidak mencukupi untuk pembayaran penuh (tersedia Rp '.number_format($buyerAvailable, 0, ',', '.').', tagihan Rp '.number_format($buyerPayableSubtotal, 0, ',', '.').').'
                     );
                 }
-                $walletUsedAmount = $subtotalAmount;
+                $walletUsedAmount = $buyerPayableSubtotal;
                 $gatewayFee = 0.00;
                 $resolvedChannel = 'wallet_full';
             } elseif ($paymentMode === 'hybrid_wallet_gateway') {
@@ -257,11 +296,11 @@ class CheckoutSplitOrderService
                 }
 
                 $desiredWallet = $requestedWalletAmount !== null && $requestedWalletAmount > 0
-                    ? min($requestedWalletAmount, $buyerAvailable, $subtotalAmount - 1000)
-                    : min($buyerAvailable, max(1000.00, floor($subtotalAmount * 0.5)));
+                    ? min($requestedWalletAmount, $buyerAvailable, $buyerPayableSubtotal - 1000)
+                    : min($buyerAvailable, max(1000.00, floor($buyerPayableSubtotal * 0.5)));
 
                 $desiredWallet = round($desiredWallet, 2);
-                if ($desiredWallet <= 0 || $desiredWallet >= $subtotalAmount) {
+                if ($desiredWallet <= 0 || $desiredWallet >= $buyerPayableSubtotal) {
                     throw new DomainException(
                         'Pembayaran Hibrida memerlukan potongan saldo lebih besar dari Rp 0 dan lebih kecil dari total belanja (gunakan Bayar Penuh Saldo jika saldo cukup 100%).'
                     );
@@ -282,7 +321,7 @@ class CheckoutSplitOrderService
                 $gatewayFee = (float) (config("nexatrade.gateway_fees.{$resolvedChannel}") ?? 1500.00);
             }
 
-            $payableAfterWallet = round($subtotalAmount - $walletUsedAmount, 2);
+            $payableAfterWallet = round($buyerPayableSubtotal - $walletUsedAmount, 2);
             $grandTotal = round($payableAfterWallet + $gatewayFee, 2);
 
             $invoiceCode = 'INV-'.now()->format('Ymd').'-'.strtoupper(Str::random(6));
@@ -295,6 +334,8 @@ class CheckoutSplitOrderService
                 'invoice_code' => $invoiceCode,
                 'buyer_id' => $buyerId,
                 'subtotal_amount' => number_format($subtotalAmount, 2, '.', ''),
+                'seller_discount_total' => number_format($sellerDiscountTotal, 2, '.', ''),
+                'platform_discount_total' => number_format($platformDiscountTotal, 2, '.', ''),
                 'gateway_fee' => number_format($gatewayFee, 2, '.', ''),
                 'wallet_used_amount' => number_format($walletUsedAmount, 2, '.', ''),
                 'grand_total' => number_format($grandTotal, 2, '.', ''),
@@ -306,6 +347,7 @@ class CheckoutSplitOrderService
 
             // Create child per-seller orders + immutable order_items snapshots + reserve vaults / decrement stock.
             $createdOrderIds = [];
+            $orderIdByIndex = [];
             foreach ($preparedOrders as $seq => $orderData) {
                 $orderCode = 'NXT-'.now()->format('Ymd').'-'.strtoupper(Str::random(5)).($seq + 1);
 
@@ -315,6 +357,9 @@ class CheckoutSplitOrderService
                     'buyer_id' => $buyerId,
                     'seller_id' => $orderData['seller_id'],
                     'gross_amount' => number_format($orderData['gross_amount'], 2, '.', ''),
+                    'seller_discount_amount' => number_format((float) $orderData['seller_discount_amount'], 2, '.', ''),
+                    'platform_discount_amount' => number_format((float) $orderData['platform_discount_amount'], 2, '.', ''),
+                    'buyer_payable_amount' => number_format((float) $orderData['buyer_payable_amount'], 2, '.', ''),
                     'platform_commission' => number_format($orderData['platform_commission'], 2, '.', ''),
                     'seller_escrow_amount' => number_format($orderData['seller_escrow_amount'], 2, '.', ''),
                     'delivery_method' => $orderData['delivery_method'],
@@ -325,11 +370,16 @@ class CheckoutSplitOrderService
                 ]);
 
                 $createdOrderIds[] = (int) $order->id;
+                $orderIdByIndex[$seq] = (int) $order->id;
 
                 foreach ($orderData['items'] as $item) {
                     $product = $item['product'];
                     $unitPrice = (float) $item['unit_price'];
                     $qty = (int) $item['quantity'];
+                    $flashItemId = $item['flash_sale_item_id'] ?? null;
+                    $originalPrice = isset($item['original_unit_price']) && $item['original_unit_price'] !== null
+                        ? number_format((float) $item['original_unit_price'], 2, '.', '')
+                        : null;
 
                     if ($item['delivery_method'] === 'instant_vault') {
                         foreach ($item['vaults'] as $vaultRow) {
@@ -346,9 +396,11 @@ class CheckoutSplitOrderService
                                 'order_id' => $order->id,
                                 'product_id' => $product->id,
                                 'product_vault_id' => $vaultRow->id,
+                                'flash_sale_item_id' => $flashItemId,
                                 'product_title_snapshot' => $product->title,
                                 'sku_snapshot' => $product->sku_code,
                                 'unit_price_snapshot' => number_format($unitPrice, 2, '.', ''),
+                                'original_unit_price' => $originalPrice,
                                 'quantity' => 1,
                                 'subtotal' => number_format($unitPrice, 2, '.', ''),
                             ]);
@@ -362,14 +414,26 @@ class CheckoutSplitOrderService
                             'order_id' => $order->id,
                             'product_id' => $product->id,
                             'product_vault_id' => null,
+                            'flash_sale_item_id' => $flashItemId,
                             'product_title_snapshot' => $product->title,
                             'sku_snapshot' => $product->sku_code,
                             'unit_price_snapshot' => number_format($unitPrice, 2, '.', ''),
+                            'original_unit_price' => $originalPrice,
                             'quantity' => $qty,
                             'subtotal' => number_format(round($unitPrice * $qty, 2), 2, '.', ''),
                         ]);
                     }
                 }
+            }
+
+            if (! empty($usagesToCreate)) {
+                $this->voucherService->persistReservedUsages(
+                    buyerId: $buyerId,
+                    invoiceId: $invoice->id,
+                    usagesToCreate: $usagesToCreate,
+                    orderIdByIndex: $orderIdByIndex,
+                    initialStatus: $paymentMode === 'wallet_full' ? 'applied' : 'reserved',
+                );
             }
 
             // Vault-Driven Stock Integrity Law (#5): re-sync products.stock atomically with available vault count.
@@ -384,13 +448,15 @@ class CheckoutSplitOrderService
 
             // Execute wallet deduction & instant settlement if wallet_full, or HYBRID_WALLET_HOLD if hybrid.
             if ($paymentMode === 'wallet_full') {
-                $this->ledgerService->deductBuyerWalletForCheckout(
-                    buyerId: $buyerId,
-                    invoiceId: $invoice->id,
-                    amount: $walletUsedAmount,
-                    invoiceCode: $invoice->invoice_code,
-                    isHybrid: false,
-                );
+                if ($walletUsedAmount > 0) {
+                    $this->ledgerService->deductBuyerWalletForCheckout(
+                        buyerId: $buyerId,
+                        invoiceId: $invoice->id,
+                        amount: $walletUsedAmount,
+                        invoiceCode: $invoice->invoice_code,
+                        isHybrid: false,
+                    );
+                }
 
                 StateTransitionGuard::assertInvoiceTransition($invoice->status, 'PAID', "Full Wallet {$invoice->invoice_code}");
 

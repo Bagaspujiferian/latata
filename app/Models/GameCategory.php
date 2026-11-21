@@ -15,6 +15,8 @@ class GameCategory extends Model
         'slug',
         'delivery_method',
         'platform_fee_percent',
+        'escrow_hold_hours',
+        'warranty_days',
         'required_inputs_schema',
     ];
 
@@ -23,6 +25,8 @@ class GameCategory extends Model
     {
         return [
             'platform_fee_percent' => 'decimal:2',
+            'escrow_hold_hours' => 'integer',
+            'warranty_days' => 'integer',
             'required_inputs_schema' => 'array',
         ];
     }

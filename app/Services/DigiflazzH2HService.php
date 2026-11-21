@@ -163,7 +163,12 @@ class DigiflazzH2HService
                 StateTransitionGuard::assertOrderTransition($orderRow->status, 'DELIVERED', "H2H sukses {$refId}");
 
                 $deliveredAt = now();
-                $autoCompleteAt = $deliveredAt->copy()->addHours((int) config('nexatrade.auto_complete_hours', 24));
+                $holdHours = (int) (DB::table('order_items')
+                    ->join('products', 'products.id', '=', 'order_items.product_id')
+                    ->join('game_categories', 'game_categories.id', '=', 'products.game_category_id')
+                    ->where('order_items.order_id', $orderModel->id)
+                    ->max('game_categories.escrow_hold_hours') ?: config('nexatrade.auto_complete_hours', 24));
+                $autoCompleteAt = $deliveredAt->copy()->addHours(max(1, $holdHours));
                 $proof = [
                     'type' => 'api_h2h_sn',
                     'provider' => 'Digiflazz H2H',
@@ -231,12 +236,13 @@ class DigiflazzH2HService
                 'updated_at' => now(),
             ]);
 
+            $buyerRefundAmount = $orderModel->refundableBuyerAmount();
             $mutations = $this->ledgerService->refundEscrowToBuyer(
                 sellerId: (int) $orderModel->seller_id,
                 buyerId: (int) $orderModel->buyer_id,
                 orderId: (int) $orderModel->id,
                 sellerEscrowAmount: (float) $orderModel->seller_escrow_amount,
-                buyerRefundAmount: (float) $orderModel->gross_amount,
+                buyerRefundAmount: $buyerRefundAmount,
                 orderCode: $orderModel->order_code,
                 reason: "H2H Provider Gagal ({$snOrMessage})",
             );
@@ -244,7 +250,7 @@ class DigiflazzH2HService
             $this->chatModerationService->postOrderMessage(
                 order: $orderModel,
                 sender: $sellerUser,
-                rawMessage: "[SISTEM H2H AUTO-REFUND] Server provider melaporkan kegagalan ({$snOrMessage}). Dana Rp ".number_format((float) $orderModel->gross_amount, 0, ',', '.').' dikembalikan 100% ke Saldo Aktif Pembeli secara instan tanpa menunggu admin.',
+                rawMessage: "[SISTEM H2H AUTO-REFUND] Server provider melaporkan kegagalan ({$snOrMessage}). Dana Rp ".number_format($buyerRefundAmount, 0, ',', '.').' dikembalikan ke Saldo Aktif Pembeli secara instan tanpa menunggu admin.',
                 senderRoleOverride: 'system',
             );
 
@@ -266,7 +272,7 @@ class DigiflazzH2HService
                 'refund_mutations' => [
                     'seller_debit_ref' => $mutations['seller_debit']->reference_code,
                     'buyer_credit_ref' => $mutations['buyer_credit']->reference_code,
-                    'buyer_refunded_amount' => (float) $orderModel->gross_amount,
+                    'buyer_refunded_amount' => $buyerRefundAmount,
                 ],
                 'message' => 'H2H gagal: pesanan direfund otomatis ke saldo dompet pembeli.',
             ];

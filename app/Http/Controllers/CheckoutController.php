@@ -5,9 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\CartItem;
 use App\Models\PaymentInvoice;
 use App\Models\Product;
+use App\Models\Voucher;
 use App\Services\CheckoutSplitOrderService;
+use App\Services\FlashSaleService;
 use App\Services\MidtransWebhookService;
+use App\Services\VoucherAccountingService;
 use DomainException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -18,17 +22,126 @@ class CheckoutController extends Controller
     public function __construct(
         private readonly CheckoutSplitOrderService $checkoutService,
         private readonly MidtransWebhookService $midtransWebhookService,
+        private readonly VoucherAccountingService $voucherService,
+        private readonly FlashSaleService $flashSaleService,
     ) {}
 
     public function cart(Request $request): View
     {
         $user = $request->user();
+        [$cartItems, $groupedPreview, $subtotal] = $this->buildCartBreakdown($user->id);
+
+        $walletAvailable = (float) ($user->wallet?->available_balance ?? 0);
+        $gatewayFees = config('nexatrade.gateway_fees');
+        $now = now();
+
+        $availablePlatformVouchers = Voucher::where('issuer_type', 'platform')
+            ->where('is_active', true)
+            ->where('starts_at', '<=', $now)
+            ->where('ends_at', '>=', $now)
+            ->whereColumn('quota_used', '<', 'quota_total')
+            ->orderByDesc('discount_value')
+            ->get();
+
+        $sellerIdsInCart = array_values(array_unique(array_map(
+            static fn (array $g): int => (int) $g['seller_id'],
+            $groupedPreview,
+        )));
+
+        $availableSellerVouchers = empty($sellerIdsInCart)
+            ? collect()
+            : Voucher::where('issuer_type', 'seller')
+                ->whereIn('seller_id', $sellerIdsInCart)
+                ->where('is_active', true)
+                ->where('starts_at', '<=', $now)
+                ->where('ends_at', '>=', $now)
+                ->whereColumn('quota_used', '<', 'quota_total')
+                ->orderByDesc('discount_value')
+                ->get()
+                ->groupBy('seller_id');
+
+        return view('checkout.cart', [
+            'cartItems' => $cartItems,
+            'groupedPreview' => $groupedPreview,
+            'subtotal' => round($subtotal, 2),
+            'walletAvailable' => $walletAvailable,
+            'gatewayFees' => $gatewayFees,
+            'availablePlatformVouchers' => $availablePlatformVouchers,
+            'availableSellerVouchers' => $availableSellerVouchers,
+        ]);
+    }
+
+    public function previewVoucher(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'code' => ['required', 'string', 'max:40'],
+            'seller_voucher_codes' => ['nullable', 'array'],
+        ]);
+
+        $user = $request->user();
+        [, $groupedPreview] = $this->buildCartBreakdown($user->id);
+
+        if (empty($groupedPreview)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Keranjang belanja Anda masih kosong.',
+            ], 422);
+        }
+
+        // If previewing a platform voucher while seller vouchers are already selected, reduce net_basis first for accurate preview.
+        $sellerCodes = is_array($validated['seller_voucher_codes'] ?? null) ? $validated['seller_voucher_codes'] : [];
+        $codeUpper = strtoupper(trim($validated['code']));
+        $targetVoucher = Voucher::where('code', $codeUpper)->first();
+
+        if ($targetVoucher && $targetVoucher->issuer_type === 'platform' && ! empty($sellerCodes)) {
+            foreach ($sellerCodes as $sid => $sCode) {
+                $cleanSCode = strtoupper(trim((string) $sCode));
+                if ($cleanSCode === '') {
+                    continue;
+                }
+                try {
+                    $sPreview = $this->voucherService->previewVoucherDiscount($cleanSCode, $user->id, $groupedPreview);
+                    if (($sPreview['issuer_type'] ?? '') === 'seller') {
+                        foreach ($sPreview['allocations'] as $idx => $alloc) {
+                            if (isset($groupedPreview[$idx])) {
+                                $groupedPreview[$idx]['net_basis'] = max(0.0, round(
+                                    (float) ($groupedPreview[$idx]['net_basis'] ?? $groupedPreview[$idx]['gross_amount']) - (float) $alloc,
+                                    2,
+                                ));
+                            }
+                        }
+                    }
+                } catch (DomainException) {
+                    // Ignore stale seller voucher during platform preview
+                }
+            }
+        }
+
+        try {
+            $preview = $this->voucherService->previewVoucherDiscount($codeUpper, $user->id, $groupedPreview);
+
+            return response()->json([
+                'ok' => true,
+                'preview' => $preview,
+            ]);
+        } catch (DomainException $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
+     * @return array{0: \Illuminate\Database\Eloquent\Collection<int, CartItem>, 1: list<array<string, mixed>>, 2: float}
+     */
+    private function buildCartBreakdown(int $userId): array
+    {
         $cartItems = CartItem::with(['product.gameCategory.game', 'product.sellerProfile'])
-            ->where('user_id', $user->id)
+            ->where('user_id', $userId)
             ->orderBy('id', 'asc')
             ->get();
 
-        // Build live Split-Order Preview grouped by (seller_id, delivery_method) matching backend exact math.
         $groupedPreview = [];
         $subtotal = 0.00;
 
@@ -39,19 +152,35 @@ class CheckoutController extends Controller
             $product = $item->product;
             $method = $product->gameCategory->delivery_method;
             $feePercent = (float) $product->gameCategory->platform_fee_percent;
-            $lineSubtotal = round((float) $product->price * (int) $item->quantity, 2);
+
+            $regularUnit = (float) $product->price;
+            $effectiveUnit = $regularUnit;
+            $isFlashPrice = false;
+            $flashItem = $this->flashSaleService->getActiveFlashItemForProduct($product->id);
+            if ($flashItem && $flashItem->remainingQuota() >= (int) $item->quantity && (int) $item->quantity <= (int) $flashItem->max_qty_per_user) {
+                $effectiveUnit = (float) $flashItem->flash_price;
+                $isFlashPrice = true;
+            }
+
+            $item->setAttribute('preview_unit_price', $effectiveUnit);
+            $item->setAttribute('preview_original_price', $regularUnit);
+            $item->setAttribute('preview_is_flash', $isFlashPrice);
+
+            $lineSubtotal = round($effectiveUnit * (int) $item->quantity, 2);
             $lineCommission = floor($lineSubtotal * ($feePercent / 100));
             $subtotal += $lineSubtotal;
 
             $groupKey = $product->seller_id.':'.$method;
             if (! isset($groupedPreview[$groupKey])) {
                 $groupedPreview[$groupKey] = [
-                    'seller_id' => $product->seller_id,
+                    'seller_id' => (int) $product->seller_id,
                     'store_name' => $product->sellerProfile?->store_name ?? 'Toko NexaTrade',
-                    'is_store_open' => $product->sellerProfile?->is_store_open ?? true,
+                    'is_store_open' => $product->sellerProfile?->isCurrentlyOpen() ?? true,
+                    'is_suspended' => (bool) ($product->sellerProfile?->is_suspended ?? false),
                     'is_sla_10m_badge' => $product->sellerProfile?->is_sla_10m_badge ?? false,
                     'delivery_method' => $method,
                     'gross_amount' => 0.00,
+                    'net_basis' => 0.00,
                     'platform_commission' => 0.00,
                     'seller_escrow_amount' => 0.00,
                     'items' => [],
@@ -60,20 +189,12 @@ class CheckoutController extends Controller
 
             $groupedPreview[$groupKey]['items'][] = $item;
             $groupedPreview[$groupKey]['gross_amount'] += $lineSubtotal;
+            $groupedPreview[$groupKey]['net_basis'] += $lineSubtotal;
             $groupedPreview[$groupKey]['platform_commission'] += $lineCommission;
             $groupedPreview[$groupKey]['seller_escrow_amount'] = $groupedPreview[$groupKey]['gross_amount'] - $groupedPreview[$groupKey]['platform_commission'];
         }
 
-        $walletAvailable = (float) ($user->wallet?->available_balance ?? 0);
-        $gatewayFees = config('nexatrade.gateway_fees');
-
-        return view('checkout.cart', [
-            'cartItems' => $cartItems,
-            'groupedPreview' => array_values($groupedPreview),
-            'subtotal' => round($subtotal, 2),
-            'walletAvailable' => $walletAvailable,
-            'gatewayFees' => $gatewayFees,
-        ]);
+        return [$cartItems, array_values($groupedPreview), round($subtotal, 2)];
     }
 
     public function addToCart(Request $request): RedirectResponse
@@ -173,7 +294,18 @@ class CheckoutController extends Controller
             'payment_mode' => ['required', 'in:gateway_only,wallet_full,hybrid_wallet_gateway'],
             'payment_channel' => ['nullable', 'string', 'max:40'],
             'wallet_amount' => ['nullable', 'numeric', 'min:0'],
+            'platform_voucher_code' => ['nullable', 'string', 'max:40'],
+            'seller_voucher_codes' => ['nullable', 'array'],
+            'seller_voucher_codes.*' => ['nullable', 'string', 'max:40'],
         ]);
+
+        $sellerVoucherCodes = [];
+        foreach ($validated['seller_voucher_codes'] ?? [] as $sid => $code) {
+            $clean = trim((string) $code);
+            if ($clean !== '') {
+                $sellerVoucherCodes[(int) $sid] = $clean;
+            }
+        }
 
         try {
             $invoice = $this->checkoutService->checkout(
@@ -183,6 +315,8 @@ class CheckoutController extends Controller
                 requestedWalletAmount: isset($validated['wallet_amount']) ? (float) $validated['wallet_amount'] : null,
                 explicitItems: null,
                 clearCart: true,
+                platformVoucherCode: filled($validated['platform_voucher_code'] ?? null) ? trim((string) $validated['platform_voucher_code']) : null,
+                sellerVoucherCodes: $sellerVoucherCodes,
             );
 
             if ($invoice->status === 'PAID') {
