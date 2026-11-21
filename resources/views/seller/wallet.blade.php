@@ -18,22 +18,55 @@
             @endphp
 
             @if($clawbackDebt > 0 || $user->sellerProfile?->is_suspended)
-                <div class="p-4 rounded-xl bg-[#FEF2F2] border border-[#FECACA] text-xs text-[#991B1B] flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-enter">
-                    <div class="flex items-start gap-2.5">
-                        <svg class="w-5 h-5 text-[#DC2626] shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
-                        <div>
-                            <div class="font-extrabold text-[#B91C1C]">
-                                {{ $user->sellerProfile?->is_suspended ? 'TOKO DITANGGUHKAN (SUSPENDED)' : 'PERINGATAN HUTANG CLAWBACK GARANSI' }}
+                <div class="p-4 rounded-xl bg-[#FEF2F2] border border-[#FECACA] text-xs text-[#991B1B] space-y-3.5 animate-enter">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div class="flex items-start gap-2.5">
+                            <svg class="w-5 h-5 text-[#DC2626] shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                            <div>
+                                <div class="font-extrabold text-[#B91C1C]">
+                                    {{ $user->sellerProfile?->is_suspended ? 'TOKO DITANGGUHKAN (SUSPENDED)' : 'PERINGATAN HUTANG CLAWBACK GARANSI' }}
+                                </div>
+                                <p class="mt-0.5 text-[#991B1B]">
+                                    {{ $user->sellerProfile?->suspension_reason ?? 'Terdapat kewajiban penggantian klaim garansi hackback yang belum terselesaikan.' }}
+                                </p>
                             </div>
-                            <p class="mt-0.5 text-[#991B1B]">
-                                {{ $user->sellerProfile?->suspension_reason ?? 'Terdapat kewajiban penggantian klaim garansi hackback yang belum terselesaikan.' }}
-                            </p>
+                        </div>
+                        <div class="text-left sm:text-right font-mono-tabular shrink-0 px-3 py-2 rounded-lg bg-white border border-[#FECACA]">
+                            <div class="text-[10px] uppercase font-semibold text-[#B91C1C]">Hutang Clawback</div>
+                            <div class="text-base font-extrabold text-[#DC2626]">Rp {{ number_format($clawbackDebt, 0, ',', '.') }}</div>
                         </div>
                     </div>
-                    <div class="text-left sm:text-right font-mono-tabular shrink-0 px-3 py-2 rounded-lg bg-white border border-[#FECACA]">
-                        <div class="text-[10px] uppercase font-semibold text-[#B91C1C]">Hutang Clawback</div>
-                        <div class="text-base font-extrabold text-[#DC2626]">Rp {{ number_format($clawbackDebt, 0, ',', '.') }}</div>
-                    </div>
+
+                    @if($clawbackDebt > 0)
+                        <div class="pt-3 border-t border-[#FECACA] grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <form method="POST" action="{{ route('seller.wallet.repay-debt') }}" class="p-3.5 rounded-xl bg-white border border-[#FECACA] space-y-2.5">
+                                @csrf
+                                <div class="font-bold text-[#111827]">Lunasi Tunggakan via Saldo Aktif</div>
+                                <input type="number" name="amount" value="{{ (float) min($clawbackDebt, max(1000, (float) ($user->wallet?->available_balance ?? 0))) }}" min="1000" max="{{ $clawbackDebt }}" step="1000" required
+                                       class="w-full h-9 px-3 font-mono-tabular bg-[#F8FAFC] border border-[#D1D5DB] rounded-lg text-[#111827]">
+                                @if($user->hasWalletPin())
+                                    <input type="password" name="wallet_pin" required inputmode="numeric" maxlength="6" placeholder="PIN Dompet 6-Digit"
+                                           class="w-full h-9 px-3 font-mono-tabular text-center tracking-[0.2em] bg-[#F8FAFC] border border-[#0068E1] rounded-lg text-[#111827]">
+                                @endif
+                                <button type="submit" class="btn-tactile w-full py-2 rounded-lg bg-[#0068E1] hover:bg-[#0055B8] text-white font-bold cursor-pointer">
+                                    Bayar dari Saldo Aktif
+                                </button>
+                            </form>
+
+                            <form method="POST" action="{{ route('seller.wallet.repay-debt-gateway') }}" class="p-3.5 rounded-xl bg-white border border-[#FECACA] space-y-2.5 flex flex-col justify-between">
+                                @csrf
+                                <div class="space-y-2">
+                                    <div class="font-bold text-[#111827]">Lunasi Langsung via Simulasi Transfer Gateway</div>
+                                    <p class="text-[11px] text-[#6B7280]">Gunakan jalur ini jika Saldo Aktif Rp 0. Pelunasan penuh otomatis mengaktifkan kembali toko Anda.</p>
+                                    <input type="number" name="amount" value="{{ $clawbackDebt }}" min="1000" max="{{ $clawbackDebt }}" step="1000" required
+                                           class="w-full h-9 px-3 font-mono-tabular bg-[#F8FAFC] border border-[#D1D5DB] rounded-lg text-[#111827]">
+                                </div>
+                                <button type="submit" class="btn-tactile w-full py-2 rounded-lg bg-[#00AA5B] hover:bg-[#00924E] text-white font-bold cursor-pointer">
+                                    Lunasi &amp; Aktifkan Kembali Toko
+                                </button>
+                            </form>
+                        </div>
+                    @endif
                 </div>
             @endif
 
@@ -141,6 +174,19 @@
                                 <span x-text="window.formatRupiah(Math.max(0, amount - adminFee))"></span>
                             </div>
                         </div>
+
+                        @if($user->hasWalletPin())
+                            <div>
+                                <label class="block font-semibold text-[#374151] mb-1">PIN Dompet 6-Digit *</label>
+                                <input type="password" name="wallet_pin" required inputmode="numeric" maxlength="6" placeholder="••••••"
+                                       class="w-full h-10 px-3 font-mono-tabular text-center tracking-[0.3em] text-sm bg-[#F8FAFC] border border-[#0068E1] rounded-lg focus:bg-white focus:outline-none">
+                            </div>
+                        @else
+                            <div class="p-2.5 rounded-lg bg-[#FFF4ED] border border-[#FED7AA] flex items-center justify-between gap-2 text-[11px] text-[#9A3412]">
+                                <span>Aktifkan PIN Dompet 6-Digit untuk mengamankan penarikan saldo.</span>
+                                <a href="{{ route('account.security') }}" class="font-bold text-[#0068E1] hover:underline shrink-0">Atur PIN</a>
+                            </div>
+                        @endif
 
                         <button type="submit" :disabled="submittingWd || !selectedBankId"
                                 class="btn-tactile w-full h-10 rounded-lg bg-[#0068E1] hover:bg-[#0055B8] text-white font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">

@@ -2,16 +2,21 @@
 
 use App\Http\Controllers\AdminChaosLabController;
 use App\Http\Controllers\AdminCmsController;
+use App\Http\Controllers\AdminFinanceController;
 use App\Http\Controllers\AdminKycController;
 use App\Http\Controllers\AdminWarrantyController;
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BankAccountController;
 use App\Http\Controllers\BuyerOrderController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\DemoAuthController;
+use App\Http\Controllers\ExportController;
 use App\Http\Controllers\InboxController;
 use App\Http\Controllers\MarketplaceController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\SellerAdCreditController;
 use App\Http\Controllers\SellerDashboardController;
+use App\Http\Controllers\SellerDebtController;
 use App\Http\Controllers\SellerKycController;
 use App\Http\Controllers\SellerProductController;
 use App\Http\Controllers\SellerPromoController;
@@ -26,17 +31,33 @@ Route::get('/p/{slug}', [MarketplaceController::class, 'show'])->name('marketpla
 Route::get('/stores/{slug}', [StorefrontController::class, 'show'])->name('stores.show');
 Route::get('/toko/{slug}', [StorefrontController::class, 'show'])->name('stores.toko');
 
-// 1-Click Demo Account Switcher & Demo Wallet Top-Up
+// Production Authentication (Login, Register, Logout)
+Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:auth-login')->name('login.submit');
+Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
+Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:auth-login')->name('register.submit');
+Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->name('logout');
+
+// 1-Click Demo Account Switcher & Demo Wallet Top-Up (Guarded by config('nexatrade.demo_switcher_enabled'))
 Route::post('/demo/switch-user', [DemoAuthController::class, 'switchUser'])->name('demo.switch-user');
 Route::post('/demo/wallet-topup', [DemoAuthController::class, 'demoTopup'])->middleware('auth')->name('demo.wallet-topup');
 
-// Authenticated Buyer, Inbox Chat, Notifications, Bank Accounts, KYC, Wishlist & Checkout
+// Authenticated Buyer, Security/PIN, Inbox Chat, Notifications, Bank Accounts, KYC, Wishlist, Exports & Checkout
 Route::middleware(['auth'])->group(function (): void {
+    // Account Security & 6-Digit Wallet PIN
+    Route::get('/account/security', [AuthController::class, 'security'])->name('account.security');
+    Route::post('/account/security/password', [AuthController::class, 'updatePassword'])->name('account.security.password');
+    Route::post('/account/security/pin', [AuthController::class, 'updateWalletPin'])
+        ->middleware('throttle:wallet-sensitive')
+        ->name('account.security.pin');
+
     // Pre-Transaction Inbox Chat
     Route::get('/inbox', [InboxController::class, 'index'])->name('inbox.index');
     Route::post('/inbox/start', [InboxController::class, 'start'])->name('inbox.start');
     Route::get('/inbox/{conversation}/messages', [InboxController::class, 'messages'])->name('inbox.messages');
-    Route::post('/inbox/{conversation}/messages', [InboxController::class, 'sendMessage'])->name('inbox.send');
+    Route::post('/inbox/{conversation}/messages', [InboxController::class, 'sendMessage'])
+        ->middleware('throttle:chat-send')
+        ->name('inbox.send');
 
     // Notification Center & Bell Actions
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
@@ -50,31 +71,34 @@ Route::middleware(['auth'])->group(function (): void {
         ->whereIn('type', ['id_card', 'selfie'])
         ->name('admin.kyc.document');
 
-    // Saved Bank Accounts (Unified Wallet + Buyer/Seller paths)
+    // Saved Bank Accounts
     Route::get('/wallet/bank-accounts', [BankAccountController::class, 'index'])->name('wallet.bank-accounts');
     Route::get('/buyer/bank-accounts', [BankAccountController::class, 'index'])->name('buyer.bank-accounts');
     Route::post('/wallet/bank-accounts', [BankAccountController::class, 'store'])->name('wallet.bank-accounts.store');
     Route::post('/wallet/bank-accounts/{id}/primary', [BankAccountController::class, 'setPrimary'])->name('wallet.bank-accounts.primary');
     Route::delete('/wallet/bank-accounts/{id}', [BankAccountController::class, 'destroy'])->name('wallet.bank-accounts.destroy');
 
-    // Wishlist & Store Follow (supports both /wishlist/toggle/{product} and /wishlist/{product}/toggle; {seller} accepts user_id OR slug)
+    // Wishlist & Store Follow
     Route::get('/buyer/wishlist', [WishlistController::class, 'index'])->name('buyer.wishlist');
     Route::post('/wishlist/toggle/{product}', [WishlistController::class, 'toggleWishlist'])->name('wishlist.toggle.alt');
     Route::post('/wishlist/{product}/toggle', [WishlistController::class, 'toggleWishlist'])->name('wishlist.toggle');
     Route::post('/stores/{seller}/follow', [WishlistController::class, 'toggleFollow'])->name('stores.follow');
 
-    // Cart, Split Checkout, Voucher Preview & Invoices
+    // Cart, Split Checkout, Voucher Preview & Invoices + PDF
     Route::get('/cart', [CheckoutController::class, 'cart'])->name('cart.index');
     Route::post('/cart/add', [CheckoutController::class, 'addToCart'])->name('cart.add');
     Route::patch('/cart/{cartItem}', [CheckoutController::class, 'updateCartItem'])->name('cart.update');
     Route::delete('/cart/{cartItem}', [CheckoutController::class, 'removeCartItem'])->name('cart.remove');
-    Route::post('/checkout/voucher-preview', [CheckoutController::class, 'previewVoucher'])->name('checkout.voucher-preview');
+    Route::post('/checkout/voucher-preview', [CheckoutController::class, 'previewVoucher'])
+        ->middleware('throttle:voucher-preview')
+        ->name('checkout.voucher-preview');
     Route::post('/checkout', [CheckoutController::class, 'processCheckout'])->name('checkout.process');
 
     Route::get('/invoices/{invoice_code}', [CheckoutController::class, 'showInvoice'])->name('invoices.show');
+    Route::get('/invoices/{invoice_code}/pdf', [ExportController::class, 'invoicePdf'])->name('invoices.pdf');
     Route::post('/invoices/{invoice_code}/simulate-pay', [CheckoutController::class, 'simulateMidtransPay'])->name('invoices.simulate-pay');
 
-    // Buyer Orders, Anti-Hackback Warranties, Reports & Wallet
+    // Buyer Orders, PDF Receipt, Anti-Hackback Warranties, Reports & Wallet
     Route::get('/buyer/warranties', [WarrantyController::class, 'index'])->name('buyer.warranties');
     Route::post('/buyer/orders/{order}/warranty-claim', [WarrantyController::class, 'fileClaim'])->name('buyer.orders.warranty-claim');
     Route::post('/reports', [WarrantyController::class, 'submitReport'])->name('reports.store');
@@ -84,11 +108,14 @@ Route::middleware(['auth'])->group(function (): void {
 
     Route::get('/buyer/orders', [BuyerOrderController::class, 'index'])->name('buyer.orders.index');
     Route::get('/buyer/orders/{order_code}', [BuyerOrderController::class, 'show'])->name('buyer.orders.show');
+    Route::get('/buyer/orders/{order_code}/pdf', [ExportController::class, 'orderPdf'])->name('buyer.orders.pdf');
     Route::post('/buyer/orders/{order_code}/decrypt/{orderItem}', [BuyerOrderController::class, 'decryptVaultItem'])->name('buyer.orders.decrypt');
     Route::post('/buyer/orders/{order_code}/claim-sla-refund', [BuyerOrderController::class, 'claimSlaRefund'])->name('buyer.orders.claim-sla');
     Route::post('/buyer/orders/{order_code}/confirm-complete', [BuyerOrderController::class, 'confirmComplete'])->name('buyer.orders.confirm');
     Route::post('/buyer/orders/{order_code}/dispute', [BuyerOrderController::class, 'openDispute'])->name('buyer.orders.dispute');
-    Route::post('/buyer/orders/{order_code}/messages', [BuyerOrderController::class, 'sendMessage'])->name('buyer.orders.messages');
+    Route::post('/buyer/orders/{order_code}/messages', [BuyerOrderController::class, 'sendMessage'])
+        ->middleware('throttle:chat-send')
+        ->name('buyer.orders.messages');
     Route::get('/buyer/wallet', [BuyerOrderController::class, 'wallet'])->name('buyer.wallet');
 });
 
@@ -118,12 +145,35 @@ Route::prefix('seller')->name('seller.')->middleware(['auth', 'role:seller'])->g
 
     Route::get('/orders', [SellerDashboardController::class, 'orders'])->name('orders');
     Route::post('/orders/{order_code}/deliver', [SellerDashboardController::class, 'deliverOrder'])->name('orders.deliver');
-    Route::post('/orders/{order_code}/messages', [SellerDashboardController::class, 'sendMessage'])->name('orders.messages');
+    Route::post('/orders/{order_code}/messages', [SellerDashboardController::class, 'sendMessage'])
+        ->middleware('throttle:chat-send')
+        ->name('orders.messages');
 
+    // Wallet, Withdrawals (PIN + Throttle), Security Deposit & Clawback Debt Repayment
     Route::get('/wallet', [SellerDashboardController::class, 'wallet'])->name('wallet');
-    Route::post('/wallet/withdraw', [SellerDashboardController::class, 'requestWithdrawal'])->name('wallet.withdraw');
-    Route::post('/wallet/lock-deposit', [SellerPromoController::class, 'lockDeposit'])->name('wallet.lock-deposit');
+    Route::post('/wallet/withdraw', [SellerDashboardController::class, 'requestWithdrawal'])
+        ->middleware('throttle:wallet-sensitive')
+        ->name('wallet.withdraw');
+    Route::post('/wallet/lock-deposit', [SellerPromoController::class, 'lockDeposit'])
+        ->middleware('throttle:wallet-sensitive')
+        ->name('wallet.lock-deposit');
+    Route::post('/wallet/repay-debt', [SellerDebtController::class, 'repayFromBalance'])
+        ->middleware('throttle:wallet-sensitive')
+        ->name('wallet.repay-debt');
+    Route::post('/wallet/repay-debt-gateway', [SellerDebtController::class, 'repayViaGateway'])
+        ->middleware('throttle:wallet-sensitive')
+        ->name('wallet.repay-debt-gateway');
     Route::get('/bank-accounts', [BankAccountController::class, 'index'])->name('bank-accounts');
+
+    // Seller Ad Credits, Store Level & CSV Exports
+    Route::get('/ad-credits', [SellerAdCreditController::class, 'index'])->name('ad-credits');
+    Route::post('/ad-credits/purchase', [SellerAdCreditController::class, 'purchase'])
+        ->middleware('throttle:wallet-sensitive')
+        ->name('ad-credits.purchase');
+    Route::post('/ad-credits/boost/{product}', [SellerAdCreditController::class, 'boostFeatured'])
+        ->name('ad-credits.boost');
+    Route::get('/exports/orders.csv', [ExportController::class, 'sellerOrdersCsv'])->name('exports.orders');
+    Route::get('/exports/mutations.csv', [ExportController::class, 'sellerMutationsCsv'])->name('exports.mutations');
 
     Route::get('/vouchers', [SellerPromoController::class, 'vouchers'])->name('vouchers');
     Route::post('/vouchers', [SellerPromoController::class, 'storeVoucher'])->name('vouchers.store');
@@ -135,8 +185,13 @@ Route::prefix('seller')->name('seller.')->middleware(['auth', 'role:seller'])->g
     Route::post('/reviews/{reviewId}/reply', [SellerDashboardController::class, 'replyReview'])->name('reviews.reply');
 });
 
-// Admin Dispute Court, KYC Queue, Withdrawals & 8-Scenario Backend Chaos Lab
+// Admin Risk, CMS, Finance P&L & 8-Scenario Backend Chaos Lab
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:admin'])->group(function (): void {
+    // Phase 4: Corporate Finance P&L, Global Ledger Audit & H2H Reconcile
+    Route::get('/finance', [AdminFinanceController::class, 'index'])->name('finance.index');
+    Route::post('/finance/audit-ledger', [AdminFinanceController::class, 'runLedgerAudit'])->name('finance.audit-ledger');
+    Route::post('/finance/reconcile-h2h', [AdminFinanceController::class, 'runH2HReconcile'])->name('finance.reconcile-h2h');
+
     Route::get('/kyc', [AdminKycController::class, 'index'])->name('kyc.index');
     Route::post('/kyc/{kyc}/approve', [AdminKycController::class, 'approve'])->name('kyc.approve');
     Route::post('/kyc/{kyc}/reject', [AdminKycController::class, 'reject'])->name('kyc.reject');
@@ -153,7 +208,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:admin'])->grou
     Route::get('/warranties', [AdminWarrantyController::class, 'index'])->name('warranties.index');
     Route::post('/warranties/{claim}/resolve', [AdminWarrantyController::class, 'resolve'])->name('warranties.resolve');
 
-    // Phase 3: Admin CMS — Master Catalog (Games, Categories, Attributes & Options)
+    // Phase 3: Admin CMS — Master Catalog
     Route::get('/cms/catalog', [AdminCmsController::class, 'catalog'])->name('cms.catalog');
     Route::post('/cms/games', [AdminCmsController::class, 'storeGame'])->name('cms.games.store');
     Route::put('/cms/games/{id}', [AdminCmsController::class, 'updateGame'])->name('cms.games.update');
@@ -171,7 +226,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:admin'])->grou
     Route::post('/cms/flash-sales', [AdminCmsController::class, 'storeFlashSale'])->name('cms.flash-sales.store');
     Route::post('/cms/flash-sales/{flashSaleId}/items', [AdminCmsController::class, 'attachFlashSaleItem'])->name('cms.flash-sales.items.attach');
 
-    // Phase 3: Trust & Safety Moderation Reports & Immutable Admin Audit Trail
+    // Phase 3: Moderation Reports & Audit Trail
     Route::get('/reports', [AdminCmsController::class, 'reports'])->name('reports.index');
     Route::post('/reports/{report}/resolve', [AdminCmsController::class, 'resolveReport'])->name('reports.resolve');
     Route::get('/audit-logs', [AdminCmsController::class, 'auditLogs'])->name('audit-logs');

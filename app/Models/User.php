@@ -20,6 +20,10 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'wallet_pin_hash',
+        'wallet_pin_attempts',
+        'wallet_pin_locked_until',
+        'wallet_pin_set_at',
         'role',
         'is_active',
     ];
@@ -27,6 +31,7 @@ class User extends Authenticatable
     /** @var list<string> */
     protected $hidden = [
         'password',
+        'wallet_pin_hash',
         'remember_token',
     ];
 
@@ -36,8 +41,21 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'wallet_pin_attempts' => 'integer',
+            'wallet_pin_locked_until' => 'datetime',
+            'wallet_pin_set_at' => 'datetime',
             'is_active' => 'boolean',
         ];
+    }
+
+    public function hasWalletPin(): bool
+    {
+        return ! empty($this->wallet_pin_hash);
+    }
+
+    public function isWalletPinLocked(): bool
+    {
+        return $this->wallet_pin_locked_until !== null && $this->wallet_pin_locked_until->isFuture();
     }
 
     public function sellerProfile(): HasOne

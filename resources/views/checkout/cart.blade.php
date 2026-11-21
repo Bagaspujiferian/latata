@@ -508,6 +508,20 @@
                         </div>
                     </div>
 
+                    {{-- 6-Digit Wallet PIN Verification (when PIN is enabled and payment uses Wallet) --}}
+                    @if(auth()->user()?->hasWalletPin())
+                        <div x-show="paymentMode !== 'gateway_only'" x-cloak class="p-3.5 rounded-xl bg-[#EFF6FF] border border-[#BFDBFE] space-y-1.5 text-xs">
+                            <label class="block font-bold text-[#1E40AF]">Masukkan PIN Dompet 6-Digit *</label>
+                            <input type="password" name="wallet_pin" :required="paymentMode !== 'gateway_only'" inputmode="numeric" maxlength="6" placeholder="••••••"
+                                   class="w-full h-10 px-3 font-mono-tabular text-center tracking-[0.3em] text-sm bg-white border border-[#0068E1] rounded-lg focus:outline-none">
+                        </div>
+                    @else
+                        <div x-show="paymentMode !== 'gateway_only'" x-cloak class="p-3 rounded-xl bg-[#F8FAFC] border border-[#E4E8EE] flex items-center justify-between gap-2 text-[11px] text-[#4B5563]">
+                            <span>Aktifkan PIN Dompet 6-Digit untuk proteksi saldo ekstra.</span>
+                            <a href="{{ route('account.security') }}" class="font-bold text-[#0068E1] hover:underline shrink-0">Atur PIN</a>
+                        </div>
+                    @endif
+
                     <button type="submit" :disabled="submittingCheckout"
                             class="btn-tactile w-full h-11 rounded-lg bg-[#0068E1] hover:bg-[#0055B8] text-white text-sm font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-65">
                         <svg x-show="submittingCheckout" x-cloak class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity="0.25" stroke-width="3"/><path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>

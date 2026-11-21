@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Game;
+use Illuminate\Support\Facades\Cache;
 
 class GameNicknameService
 {
@@ -14,14 +15,24 @@ class GameNicknameService
      *   region: ?string,
      *   provider: string,
      *   latency_ms: int,
-     *   message: string
+     *   message: string,
+     *   cached: bool
      * }
      */
     public function verify(Game $game, array $inputs): array
     {
         $provider = $game->nickname_provider_code ?? strtoupper($game->slug);
+        $cacheKey = $this->buildCacheKey($game, $inputs);
 
-        return match ($game->slug) {
+        $cachedPayload = Cache::get($cacheKey);
+        if (is_array($cachedPayload)) {
+            $cachedPayload['cached'] = true;
+            $cachedPayload['latency_ms'] = 4;
+
+            return $cachedPayload;
+        }
+
+        $result = match ($game->slug) {
             'mobile-legends' => $this->verifyMlbb($inputs, $provider),
             'valorant' => $this->verifyValorant($inputs, $provider),
             'genshin-impact' => $this->verifyGenshin($inputs, $provider),
@@ -35,6 +46,26 @@ class GameNicknameService
                 'message' => 'Produk ini tidak memerlukan verifikasi nickname in-game.',
             ],
         };
+
+        $result['cached'] = false;
+
+        if (($result['valid'] ?? false) === true) {
+            Cache::put($cacheKey, $result, now()->addMinutes(15));
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param  array<string, mixed>  $inputs
+     */
+    private function buildCacheKey(Game $game, array $inputs): string
+    {
+        $gameCode = strtolower($game->nickname_provider_code ?? $game->slug);
+        $primary = trim((string) ($inputs['user_id'] ?? $inputs['riot_id'] ?? $inputs['uid'] ?? $inputs['grow_id'] ?? 'none'));
+        $secondary = trim((string) ($inputs['zone_id'] ?? $inputs['server'] ?? $inputs['world_name'] ?? 'default'));
+
+        return "nickname:{$gameCode}:".strtolower($primary).':'.strtolower($secondary);
     }
 
     /**

@@ -17,6 +17,10 @@ class DemoAuthController extends Controller
 
     public function switchUser(Request $request): RedirectResponse
     {
+        if (! (bool) config('nexatrade.demo_switcher_enabled', false)) {
+            abort(404);
+        }
+
         $validated = $request->validate([
             'email' => ['required', 'email', 'exists:users,email'],
             'redirect_to' => ['nullable', 'string'],
@@ -25,6 +29,7 @@ class DemoAuthController extends Controller
         $user = User::where('email', $validated['email'])->where('is_active', true)->firstOrFail();
         Auth::login($user);
         $request->session()->regenerate();
+        $request->session()->forget('nexatrade_logged_out');
 
         if (! empty($validated['redirect_to'])) {
             return redirect($validated['redirect_to'])
@@ -43,6 +48,10 @@ class DemoAuthController extends Controller
 
     public function demoTopup(Request $request): RedirectResponse
     {
+        if (! (bool) config('nexatrade.demo_switcher_enabled', false)) {
+            abort(404);
+        }
+
         $user = $request->user();
         if (! $user) {
             return back()->with('error', 'Pilih akun terlebih dahulu.');

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\DebtRepayment;
 use App\Models\GameCategory;
 use App\Models\Order;
 use App\Models\OrderReview;
@@ -17,6 +18,7 @@ use App\Services\SellerCatalogService;
 use App\Services\StorefrontEngagementService;
 use App\Services\StorefrontService;
 use App\Services\VaultEncryptionService;
+use App\Services\WalletPinService;
 use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\RedirectResponse;
@@ -34,6 +36,7 @@ class SellerDashboardController extends Controller
         private readonly ProductMerchandisingService $merchandisingService,
         private readonly StorefrontEngagementService $engagementService,
         private readonly StorefrontService $storefrontService,
+        private readonly WalletPinService $walletPinService,
     ) {}
 
     public function dashboard(Request $request): View
@@ -377,9 +380,14 @@ class SellerDashboardController extends Controller
             ->orderByDesc('id')
             ->get();
 
+        $debtRepayments = DebtRepayment::where('seller_id', $user->id)
+            ->orderByDesc('id')
+            ->limit(20)
+            ->get();
+
         $adminFee = (float) config('nexatrade.withdrawal_admin_fee', 2500.00);
 
-        return view('seller.wallet', compact('user', 'mutations', 'withdrawals', 'bankAccounts', 'adminFee'));
+        return view('seller.wallet', compact('user', 'mutations', 'withdrawals', 'bankAccounts', 'debtRepayments', 'adminFee'));
     }
 
     public function requestWithdrawal(Request $request): RedirectResponse
@@ -392,9 +400,12 @@ class SellerDashboardController extends Controller
             'account_number' => [$hasSavedAccount ? 'nullable' : 'required', 'string', 'min:6', 'max:50'],
             'account_holder' => [$hasSavedAccount ? 'nullable' : 'required', 'string', 'min:3', 'max:100'],
             'amount' => ['required', 'numeric', 'min:10000'],
+            'wallet_pin' => ['nullable', 'string', 'max:6'],
         ]);
 
         try {
+            $this->walletPinService->verifyPinOrFail($request->user()->id, $request->input('wallet_pin'), true);
+
             $withdrawal = $this->orderStateService->requestWithdrawal(
                 userId: $request->user()->id,
                 bankName: (string) ($validated['bank_name'] ?? ''),

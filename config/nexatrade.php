@@ -2,6 +2,7 @@
 
 return [
     'app_brand' => 'NexaTrade Enterprise Engine',
+    'demo_switcher_enabled' => (bool) env('NEXATRADE_DEMO_SWITCHER', env('APP_ENV', 'local') !== 'production'),
 
     'midtrans' => [
         'server_key' => env('MIDTRANS_SERVER_KEY', 'SB-Mid-server-NexaTradeEnterpriseKey2026'),

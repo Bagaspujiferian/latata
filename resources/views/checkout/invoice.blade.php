@@ -19,7 +19,7 @@
                     </div>
                 </div>
 
-                <div class="text-right">
+                <div class="text-right space-y-2">
                     @php
                         $statusBadge = match ($invoice->status) {
                             'PAID' => 'bg-[#ECFDF5] text-[#047857] border-[#A7F3D0]',
@@ -28,9 +28,16 @@
                             default => 'bg-[#FFF4ED] text-[#C2410C] border-[#FED7AA]',
                         };
                     @endphp
-                    <span class="{{ $invoice->status === 'UNPAID' ? 'badge-live-pulse' : 'inline-flex' }} px-2.5 py-1 rounded-full border text-xs font-bold {{ $statusBadge }}">
-                        {{ $invoice->status }}
-                    </span>
+                    <div class="flex flex-wrap items-center justify-end gap-2">
+                        <a href="{{ route('invoices.pdf', $invoice->invoice_code) }}" target="_blank"
+                           class="btn-tactile inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-[#EFF6FF] border border-[#BFDBFE] text-[#0068E1] text-xs font-bold">
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                            <span>Unduh Invoice PDF</span>
+                        </a>
+                        <span class="{{ $invoice->status === 'UNPAID' ? 'badge-live-pulse' : 'inline-flex' }} px-2.5 py-1 rounded-full border text-xs font-bold {{ $statusBadge }}">
+                            {{ $invoice->status }}
+                        </span>
+                    </div>
 
                     @if($invoice->status === 'UNPAID')
                         <div class="mt-2 text-[11px] text-[#6B7280]">Sisa Waktu Pembayaran</div>

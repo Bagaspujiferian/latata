@@ -26,13 +26,20 @@
             <span class="font-mono-tabular font-bold text-[#111827]">{{ $order->order_code }}</span>
         </div>
 
-        @if($order->paymentInvoice)
-            <a href="{{ route('invoices.show', $order->paymentInvoice->invoice_code) }}"
-               class="btn-tactile inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-[#E4E8EE] hover:border-[#0068E1] text-xs font-medium text-[#4B5563] hover:text-[#0068E1]">
-                <span>Invoice Induk:</span>
-                <span class="font-mono-tabular font-bold text-[#111827]">{{ $order->paymentInvoice->invoice_code }}</span>
+        <div class="flex flex-wrap items-center gap-2">
+            <a href="{{ route('buyer.orders.pdf', $order->order_code) }}" target="_blank"
+               class="btn-tactile inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#ECFDF5] hover:bg-[#D1FAE5] border border-[#A7F3D0] text-xs font-bold text-[#047857]">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                <span>Unduh Bukti &amp; Garansi PDF</span>
             </a>
-        @endif
+            @if($order->paymentInvoice)
+                <a href="{{ route('invoices.show', $order->paymentInvoice->invoice_code) }}"
+                   class="btn-tactile inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-[#E4E8EE] hover:border-[#0068E1] text-xs font-medium text-[#4B5563] hover:text-[#0068E1]">
+                    <span>Invoice Induk:</span>
+                    <span class="font-mono-tabular font-bold text-[#111827]">{{ $order->paymentInvoice->invoice_code }}</span>
+                </a>
+            @endif
+        </div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start"

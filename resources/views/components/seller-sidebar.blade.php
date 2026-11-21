@@ -28,6 +28,12 @@
             'icon' => '<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/>',
         ],
         [
+            'route' => 'seller.ad-credits',
+            'label' => 'Kredit Sundul & Export',
+            'active' => request()->routeIs('seller.ad-credits*'),
+            'icon' => '<path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>',
+        ],
+        [
             'route' => 'seller.wallet',
             'label' => 'Dompet, Deposit & Tarik',
             'active' => request()->routeIs('seller.wallet'),

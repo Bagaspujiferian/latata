@@ -10,6 +10,7 @@ use App\Services\CheckoutSplitOrderService;
 use App\Services\FlashSaleService;
 use App\Services\MidtransWebhookService;
 use App\Services\VoucherAccountingService;
+use App\Services\WalletPinService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -24,6 +25,7 @@ class CheckoutController extends Controller
         private readonly MidtransWebhookService $midtransWebhookService,
         private readonly VoucherAccountingService $voucherService,
         private readonly FlashSaleService $flashSaleService,
+        private readonly WalletPinService $walletPinService,
     ) {}
 
     public function cart(Request $request): View
@@ -209,6 +211,7 @@ class CheckoutController extends Controller
             'payment_mode' => ['nullable', 'in:gateway_only,wallet_full,hybrid_wallet_gateway'],
             'payment_channel' => ['nullable', 'string', 'max:40'],
             'wallet_amount' => ['nullable', 'numeric', 'min:0'],
+            'wallet_pin' => ['nullable', 'string', 'max:6'],
         ]);
 
         $product = Product::with(['gameCategory', 'sellerProfile'])->findOrFail((int) $validated['product_id']);
@@ -221,9 +224,14 @@ class CheckoutController extends Controller
 
         if (($validated['action_mode'] ?? 'cart') === 'instant_buy') {
             try {
+                $instantPaymentMode = $validated['payment_mode'] ?? 'wallet_full';
+                if ($instantPaymentMode !== 'gateway_only') {
+                    $this->walletPinService->verifyPinOrFail($user->id, $request->input('wallet_pin'), true);
+                }
+
                 $invoice = $this->checkoutService->checkout(
                     buyerId: $user->id,
-                    paymentMode: $validated['payment_mode'] ?? 'wallet_full',
+                    paymentMode: $instantPaymentMode,
                     paymentChannel: $validated['payment_channel'] ?? 'qris',
                     requestedWalletAmount: isset($validated['wallet_amount']) ? (float) $validated['wallet_amount'] : null,
                     explicitItems: [[
@@ -297,6 +305,7 @@ class CheckoutController extends Controller
             'platform_voucher_code' => ['nullable', 'string', 'max:40'],
             'seller_voucher_codes' => ['nullable', 'array'],
             'seller_voucher_codes.*' => ['nullable', 'string', 'max:40'],
+            'wallet_pin' => ['nullable', 'string', 'max:6'],
         ]);
 
         $sellerVoucherCodes = [];
@@ -308,6 +317,10 @@ class CheckoutController extends Controller
         }
 
         try {
+            if ($validated['payment_mode'] !== 'gateway_only') {
+                $this->walletPinService->verifyPinOrFail($user->id, $request->input('wallet_pin'), true);
+            }
+
             $invoice = $this->checkoutService->checkout(
                 buyerId: $user->id,
                 paymentMode: $validated['payment_mode'],

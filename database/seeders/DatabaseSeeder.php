@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\AdCreditPackage;
 use App\Models\AttributeOption;
 use App\Models\CartItem;
 use App\Models\CategoryAttribute;
@@ -18,12 +19,14 @@ use App\Models\User;
 use App\Models\Wallet;
 use App\Models\WarrantyClaim;
 use App\Services\AccountWarrantyService;
+use App\Services\AdCreditAndStoreLevelService;
 use App\Services\AdminCmsAndAuditService;
 use App\Services\BankAccountService;
 use App\Services\ChatModerationService;
 use App\Services\CheckoutSplitOrderService;
 use App\Services\ConversationService;
 use App\Services\EscrowLedgerService;
+use App\Services\FinanceAndLedgerAuditService;
 use App\Services\NotificationService;
 use App\Services\OrderStateAndSlaService;
 use App\Services\SellerKycService;
@@ -1208,6 +1211,53 @@ class DatabaseSeeder extends Seeder
             refType: 'flash_sale',
             refId: $flashSale->id,
         );
+
+        // =====================================================================
+        // (N) PHASE 4: AD CREDIT PACKAGES, 1 PAID PURCHASE & INITIAL BALANCED
+        //     GLOBAL LEDGER AUDIT SNAPSHOT
+        // =====================================================================
+        $adCreditService = app(AdCreditAndStoreLevelService::class);
+        $financeAuditService = app(FinanceAndLedgerAuditService::class);
+
+        $pkgStarter = AdCreditPackage::create([
+            'code' => 'STARTER-10',
+            'name' => 'Paket Starter Sundul',
+            'credits_amount' => 10,
+            'bonus_credits' => 0,
+            'price' => '15000.00',
+            'badge_label' => null,
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+
+        AdCreditPackage::create([
+            'code' => 'PRO-30',
+            'name' => 'Paket Pro Juragan',
+            'credits_amount' => 30,
+            'bonus_credits' => 5,
+            'price' => '40000.00',
+            'badge_label' => 'Paling Laris',
+            'is_active' => true,
+            'sort_order' => 2,
+        ]);
+
+        AdCreditPackage::create([
+            'code' => 'SULTAN-100',
+            'name' => 'Paket Sultan Dominasi',
+            'credits_amount' => 100,
+            'bonus_credits' => 25,
+            'price' => '120000.00',
+            'badge_label' => 'Hemat 20%',
+            'is_active' => true,
+            'sort_order' => 3,
+        ]);
+
+        // Neutralized funding + real double-entry purchase so Seller 1 available_balance stays exact & ledger stays BALANCED!
+        $ledgerService->adminDemoTopup($seller1->id, 15000.00, 'SEED-ADCRED-FUND-S1', 'Alokasi dana awal pembelian paket kredit promosi');
+        $adCreditService->purchasePackageWithWallet($seller1->id, $pkgStarter->id);
+
+        // Generate initial global ledger reconciliation snapshot (must be BALANCED with Rp 0 discrepancy!)
+        $financeAuditService->runGlobalLedgerAudit('seeder');
     }
 
     /**

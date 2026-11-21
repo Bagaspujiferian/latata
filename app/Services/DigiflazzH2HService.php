@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Support\StateTransitionGuard;
 use DomainException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 
 class DigiflazzH2HService
 {
@@ -16,6 +17,75 @@ class DigiflazzH2HService
         private readonly SellerSlaMetricsService $slaMetricsService,
         private readonly ChatModerationService $chatModerationService,
     ) {}
+
+    /**
+     * Poll H2H provider status using the EXACT existing h2h_reference_id (never generates a new ref_id).
+     *
+     * @return array{ref_id: string, status: string, sn_or_message: string, raw: array<string, mixed>}
+     */
+    public function checkOrderStatus(Order $order): array
+    {
+        $refId = (string) ($order->h2h_reference_id ?: $order->order_code);
+        $username = (string) config('nexatrade.digiflazz.username');
+        $apiKey = (string) config('nexatrade.digiflazz.api_key');
+        $signature = md5($username.$apiKey.$refId);
+
+        $order->loadMissing(['items.product']);
+        $firstItem = $order->items->first();
+        $buyerSkuCode = $firstItem?->product?->h2h_provider_sku ?? $firstItem?->sku_snapshot ?? 'MLBB-86DM';
+        $customerNo = $this->formatCustomerNo($order->buyer_game_inputs ?? []);
+
+        $requestPayload = [
+            'username' => $username,
+            'buyer_sku_code' => $buyerSkuCode,
+            'customer_no' => $customerNo,
+            'ref_id' => $refId,
+            'sign' => $signature,
+        ];
+
+        $logData = is_array($order->h2h_response_log) ? $order->h2h_response_log : [];
+
+        if ((bool) config('nexatrade.digiflazz.simulate_live_dispatch', true)) {
+            $forcedStatus = strtolower((string) ($logData['simulated_check_status'] ?? ''));
+
+            if ($forcedStatus === 'gagal' || ($order->buyer_game_inputs['user_id'] ?? null) === '999999999') {
+                return [
+                    'ref_id' => $refId,
+                    'status' => 'gagal',
+                    'sn_or_message' => (string) ($logData['simulated_check_message'] ?? 'Provider timeout / ID ditolak saat rekonsiliasi H2H'),
+                    'raw' => ['mode' => 'simulated_check', 'request' => $requestPayload, 'status' => 'Gagal'],
+                ];
+            }
+
+            if ($forcedStatus === 'pending') {
+                return [
+                    'ref_id' => $refId,
+                    'status' => 'pending',
+                    'sn_or_message' => 'Transaksi masih diproses oleh server provider.',
+                    'raw' => ['mode' => 'simulated_check', 'request' => $requestPayload, 'status' => 'Pending'],
+                ];
+            }
+
+            return [
+                'ref_id' => $refId,
+                'status' => 'sukses',
+                'sn_or_message' => (string) ($logData['simulated_check_sn'] ?? "SN-RECON-{$refId}"),
+                'raw' => ['mode' => 'simulated_check', 'request' => $requestPayload, 'status' => 'Sukses'],
+            ];
+        }
+
+        $response = Http::timeout(10)->post((string) config('nexatrade.digiflazz.endpoint'), $requestPayload);
+        $data = (array) ($response->json('data') ?? []);
+        $providerStatus = strtolower((string) ($data['status'] ?? 'pending'));
+        $normalized = in_array($providerStatus, ['sukses', 'gagal', 'pending'], true) ? $providerStatus : 'pending';
+
+        return [
+            'ref_id' => $refId,
+            'status' => $normalized,
+            'sn_or_message' => (string) ($data['sn'] ?: ($data['message'] ?? 'Status rekonsiliasi H2H')),
+            'raw' => $data,
+        ];
+    }
 
     /**
      * Build and record a deterministic H2H top-up dispatch to Digiflazz.

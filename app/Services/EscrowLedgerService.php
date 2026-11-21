@@ -384,6 +384,51 @@ class EscrowLedgerService
         });
     }
 
+    public function debitForAdCreditPurchase(
+        int $sellerId,
+        float $amount,
+        string $purchaseCode,
+        string $packageName,
+        bool $alreadyLocked = false,
+    ): WalletMutation {
+        return DB::transaction(function () use ($sellerId, $amount, $purchaseCode, $packageName, $alreadyLocked): WalletMutation {
+            return $this->mutateLockedWallet(
+                userId: $sellerId,
+                bucket: 'available',
+                direction: 'DEBIT',
+                amount: $amount,
+                mutationType: 'AD_CREDIT_PURCHASE',
+                referenceCode: "ADCRED-{$purchaseCode}",
+                description: "Pembelian paket kredit promosi {$packageName} ({$purchaseCode})",
+                orderId: null,
+                paymentInvoiceId: null,
+                alreadyLocked: $alreadyLocked,
+            );
+        });
+    }
+
+    public function debitForSellerDebtRecovery(
+        int $sellerId,
+        float $amount,
+        string $repaymentCode,
+        bool $alreadyLocked = false,
+    ): WalletMutation {
+        return DB::transaction(function () use ($sellerId, $amount, $repaymentCode, $alreadyLocked): WalletMutation {
+            return $this->mutateLockedWallet(
+                userId: $sellerId,
+                bucket: 'available',
+                direction: 'DEBIT',
+                amount: $amount,
+                mutationType: 'SELLER_DEBT_RECOVERY',
+                referenceCode: "DEBT-REC-{$repaymentCode}",
+                description: "Pelunasan tunggakan clawback garansi ({$repaymentCode})",
+                orderId: null,
+                paymentInvoiceId: null,
+                alreadyLocked: $alreadyLocked,
+            );
+        });
+    }
+
     /**
      * @param  list<int>  $userIds
      */

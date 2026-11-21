@@ -48,6 +48,7 @@
                     <a href="{{ route('seller.dashboard') }}" class="font-medium text-[#0068E1] hover:underline">TokoKu (Seller Center)</a>
                 @endif
                 @if($currentUser?->isAdmin())
+                    <a href="{{ route('admin.finance.index') }}" class="font-semibold text-[#00AA5B] hover:underline">Finance P&amp;L</a>
                     <a href="{{ route('admin.cms.catalog') }}" class="font-medium text-[#0068E1] hover:underline">CMS Katalog</a>
                     <a href="{{ route('admin.warranties.index') }}" class="font-medium text-[#0068E1] hover:underline">Klaim Garansi</a>
                     <a href="{{ route('admin.kyc.index') }}" class="font-medium text-[#0068E1] hover:underline">Verifikasi KYC</a>
@@ -342,6 +343,15 @@
                                     <svg class="w-4 h-4 text-[#6B7280]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
                                     <span>Rekening Bank Tersimpan</span>
                                 </a>
+                                <a href="{{ route('account.security') }}" class="flex items-center justify-between px-3.5 py-2 hover:bg-[#F8FAFC] hover:text-[#0068E1]">
+                                    <span class="flex items-center gap-2.5">
+                                        <svg class="w-4 h-4 text-[#6B7280]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                        <span>Keamanan &amp; PIN</span>
+                                    </span>
+                                    @if($currentUser->hasWalletPin())
+                                        <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[#ECFDF5] text-[#047857]">PIN AKTIF</span>
+                                    @endif
+                                </a>
                                 @if($currentUser->isBuyer())
                                     <a href="{{ route('buyer.open-store') }}" class="flex items-center gap-2.5 px-3.5 py-2 hover:bg-[#ECFDF5] text-[#047857] font-semibold">
                                         <svg class="w-4 h-4 text-[#00AA5B]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M2 7h20"/></svg>
@@ -367,10 +377,18 @@
                                         <svg class="w-4 h-4 text-[#F05A28]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/></svg>
                                         <span>Voucher Toko</span>
                                     </a>
+                                    <a href="{{ route('seller.ad-credits') }}" class="flex items-center gap-2.5 px-3.5 py-2 hover:bg-[#F8FAFC]">
+                                        <svg class="w-4 h-4 text-[#0068E1]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+                                        <span>Kredit Sundul &amp; CSV</span>
+                                    </a>
                                 @endif
 
                                 @if($currentUser->isAdmin())
                                     <div class="my-1 border-t border-[#F1F5F9]"></div>
+                                    <a href="{{ route('admin.finance.index') }}" class="flex items-center gap-2.5 px-3.5 py-2 hover:bg-[#ECFDF5] text-[#047857] font-semibold">
+                                        <svg class="w-4 h-4 text-[#00AA5B]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                                        <span>Finance P&amp;L &amp; Ledger</span>
+                                    </a>
                                     <a href="{{ route('admin.cms.catalog') }}" class="flex items-center gap-2.5 px-3.5 py-2 hover:bg-[#EFF6FF] text-[#0068E1] font-semibold">
                                         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
                                         <span>Master Katalog CMS</span>
@@ -420,18 +438,36 @@
                                 @endif
                             </div>
 
-                            <div class="pt-1.5 px-3 border-t border-[#F1F5F9]">
-                                <form method="POST" action="{{ route('demo.wallet-topup') }}">
+                            <div class="pt-1.5 px-3 border-t border-[#F1F5F9] space-y-1.5">
+                                @if($demoSwitcherEnabled ?? false)
+                                    <form method="POST" action="{{ route('demo.wallet-topup') }}">
+                                        @csrf
+                                        <input type="hidden" name="amount" value="250000">
+                                        <button type="submit" class="btn-tactile w-full py-1.5 px-3 rounded-lg bg-[#F8FAFC] hover:bg-[#EFF6FF] border border-[#E4E8EE] hover:border-[#BFDBFE] text-xs font-semibold text-[#0068E1] flex items-center justify-center gap-1.5 cursor-pointer">
+                                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                                            <span>Top-Up Demo Rp 250.000</span>
+                                        </button>
+                                    </form>
+                                @endif
+                                <form method="POST" action="{{ route('logout') }}">
                                     @csrf
-                                    <input type="hidden" name="amount" value="250000">
-                                    <button type="submit" class="btn-tactile w-full py-1.5 px-3 rounded-lg bg-[#F8FAFC] hover:bg-[#EFF6FF] border border-[#E4E8EE] hover:border-[#BFDBFE] text-xs font-semibold text-[#0068E1] flex items-center justify-center gap-1.5 cursor-pointer">
-                                        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                                        <span>Top-Up Demo Rp 250.000</span>
+                                    <button type="submit" class="btn-tactile w-full py-1.5 px-3 rounded-lg bg-white hover:bg-[#FEF2F2] border border-[#E4E8EE] hover:border-[#FECACA] text-xs font-semibold text-[#DC2626] flex items-center justify-center gap-1.5 cursor-pointer">
+                                        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+                                        <span>Keluar</span>
                                     </button>
                                 </form>
                             </div>
                         </div>
                     </div>
+                @else
+                    <a href="{{ route('login') }}"
+                       class="btn-tactile h-10 px-4 rounded-lg border border-[#0068E1] bg-white hover:bg-[#EFF6FF] text-[#0068E1] text-xs font-bold inline-flex items-center">
+                        Masuk
+                    </a>
+                    <a href="{{ route('register') }}"
+                       class="btn-tactile h-10 px-4 rounded-lg bg-[#0068E1] hover:bg-[#0055B8] text-white text-xs font-bold inline-flex items-center">
+                        Daftar
+                    </a>
                 @endif
             </div>
         </div>
@@ -557,7 +593,7 @@
     {{-- ===================================================================== --}}
     {{-- DISCREET FLOATING DEV ACCOUNT SWITCHER WIDGET (bottom-4 right-4)      --}}
     {{-- ===================================================================== --}}
-    @if(! empty($demoUsers) && $demoUsers->isNotEmpty())
+    @if(($demoSwitcherEnabled ?? false) && ! empty($demoUsers) && $demoUsers->isNotEmpty())
         @php
             $activeShortRole = match ($currentUser?->email) {
                 'bagas@nexatrade.id' => 'Buyer 1 · Bagas',

@@ -11,8 +11,11 @@ use App\Models\WarrantyClaim;
 use App\Models\WithdrawalRequest;
 use App\Services\ConversationService;
 use App\Services\NotificationService;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -26,14 +29,23 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $this->configureRateLimiters();
+
         View::composer('layouts.app', function ($view): void {
             if (! Schema::hasTable('users')) {
                 return;
             }
 
-            // Auto-login Buyer 1 seamlessly on first demo visit if guest, so 1-click checkout works immediately.
+            $demoSwitcherEnabled = (bool) config('nexatrade.demo_switcher_enabled', false);
+
+            // Auto-login Buyer 1 ONLY when Demo Switcher is enabled, outside unit tests, and user has not explicitly logged out.
             $authUser = Auth::user();
-            if (! $authUser && ! app()->runningUnitTests()) {
+            if (
+                ! $authUser
+                && $demoSwitcherEnabled
+                && ! app()->runningUnitTests()
+                && ! session('nexatrade_logged_out', false)
+            ) {
                 $defaultBuyer = User::where('email', 'bagas@nexatrade.id')->first();
                 if ($defaultBuyer) {
                     Auth::login($defaultBuyer);
@@ -43,16 +55,18 @@ class AppServiceProvider extends ServiceProvider
 
             $authUser?->load(['wallet', 'sellerProfile']);
 
-            $demoUsers = User::with(['wallet', 'sellerProfile'])
-                ->whereIn('email', [
-                    'bagas@nexatrade.id',
-                    'proplayer@nexatrade.id',
-                    'juragan@nexatrade.id',
-                    'sultan@nexatrade.id',
-                    'admin@nexatrade.id',
-                ])
-                ->orderByRaw("FIELD(email, 'bagas@nexatrade.id', 'proplayer@nexatrade.id', 'juragan@nexatrade.id', 'sultan@nexatrade.id', 'admin@nexatrade.id')")
-                ->get();
+            $demoUsers = $demoSwitcherEnabled
+                ? User::with(['wallet', 'sellerProfile'])
+                    ->whereIn('email', [
+                        'bagas@nexatrade.id',
+                        'proplayer@nexatrade.id',
+                        'juragan@nexatrade.id',
+                        'sultan@nexatrade.id',
+                        'admin@nexatrade.id',
+                    ])
+                    ->orderByRaw("FIELD(email, 'bagas@nexatrade.id', 'proplayer@nexatrade.id', 'juragan@nexatrade.id', 'sultan@nexatrade.id', 'admin@nexatrade.id')")
+                    ->get()
+                : collect();
 
             $cartCount = $authUser
                 ? (int) CartItem::where('user_id', $authUser->id)->sum('quantity')
@@ -78,6 +92,7 @@ class AppServiceProvider extends ServiceProvider
             $view->with([
                 'currentUser' => $authUser,
                 'demoUsers' => $demoUsers,
+                'demoSwitcherEnabled' => $demoSwitcherEnabled,
                 'cartCount' => $cartCount,
                 'wishlistCount' => $wishlistCount,
                 'inboxUnreadCount' => $inboxUnreadCount,
@@ -100,6 +115,39 @@ class AppServiceProvider extends ServiceProvider
                 'openWarrantyClaims' => $data['openWarrantyClaims'] ?? (Schema::hasTable('warranty_claims') ? WarrantyClaim::whereIn('status', ['open', 'investigating'])->count() : 0),
                 'openReports' => $data['openReports'] ?? (Schema::hasTable('moderation_reports') ? ModerationReport::where('status', 'open')->count() : 0),
             ]);
+        });
+    }
+
+    private function configureRateLimiters(): void
+    {
+        RateLimiter::for('auth-login', function (Request $request): Limit {
+            $email = strtolower(trim((string) $request->input('email', 'guest')));
+
+            return Limit::perMinute(10)->by($email.'|'.$request->ip());
+        });
+
+        RateLimiter::for('voucher-preview', function (Request $request): Limit {
+            $key = $request->user()?->id ? 'u:'.$request->user()->id : 'ip:'.$request->ip();
+
+            return Limit::perMinute(20)->by($key);
+        });
+
+        RateLimiter::for('nickname-verify', function (Request $request): Limit {
+            $key = $request->user()?->id ? 'u:'.$request->user()->id : 'ip:'.$request->ip();
+
+            return Limit::perMinute(30)->by($key);
+        });
+
+        RateLimiter::for('wallet-sensitive', function (Request $request): Limit {
+            $key = $request->user()?->id ? 'u:'.$request->user()->id : 'ip:'.$request->ip();
+
+            return Limit::perMinute(10)->by($key);
+        });
+
+        RateLimiter::for('chat-send', function (Request $request): Limit {
+            $key = $request->user()?->id ? 'u:'.$request->user()->id : 'ip:'.$request->ip();
+
+            return Limit::perMinute(40)->by($key);
         });
     }
 }
