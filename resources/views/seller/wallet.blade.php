@@ -55,18 +55,20 @@
                                 </button>
                             </form>
 
-                            <form method="POST" action="{{ route('seller.wallet.repay-debt-gateway') }}" class="p-3.5 rounded-xl bg-white border border-[#FECACA] space-y-2.5 flex flex-col justify-between">
-                                @csrf
-                                <div class="space-y-2">
-                                    <div class="font-bold text-[#111827]">Lunasi Langsung via Simulasi Transfer Gateway</div>
-                                    <p class="text-[11px] text-[#6B7280]">Gunakan jalur ini jika Saldo Aktif Rp 0. Pelunasan penuh otomatis mengaktifkan kembali toko Anda.</p>
-                                    <input type="number" name="amount" value="{{ $clawbackDebt }}" min="1000" max="{{ $clawbackDebt }}" step="1000" required
-                                           class="w-full h-9 px-3 font-mono-tabular bg-[#F8FAFC] border border-[#D1D5DB] rounded-lg text-[#111827]">
-                                </div>
-                                <button type="submit" class="btn-tactile w-full py-2 rounded-lg bg-[#00AA5B] hover:bg-[#00924E] text-white font-bold cursor-pointer">
-                                    Lunasi &amp; Aktifkan Kembali Toko
-                                </button>
-                            </form>
+                            @if(config('nexatrade.demo_switcher_enabled'))
+                                <form method="POST" action="{{ route('seller.wallet.repay-debt-gateway') }}" class="p-3.5 rounded-xl bg-white border border-[#FECACA] space-y-2.5 flex flex-col justify-between">
+                                    @csrf
+                                    <div class="space-y-2">
+                                        <div class="font-bold text-[#111827]">Lunasi Langsung via Simulasi Transfer Gateway</div>
+                                        <p class="text-[11px] text-[#6B7280]">Gunakan jalur ini jika Saldo Aktif Rp 0. Pelunasan penuh otomatis mengaktifkan kembali toko Anda.</p>
+                                        <input type="number" name="amount" value="{{ $clawbackDebt }}" min="1000" max="{{ $clawbackDebt }}" step="1000" required
+                                               class="w-full h-9 px-3 font-mono-tabular bg-[#F8FAFC] border border-[#D1D5DB] rounded-lg text-[#111827]">
+                                    </div>
+                                    <button type="submit" class="btn-tactile w-full py-2 rounded-lg bg-[#00AA5B] hover:bg-[#00924E] text-white font-bold cursor-pointer">
+                                        Lunasi &amp; Aktifkan Kembali Toko
+                                    </button>
+                                </form>
+                            @endif
                         </div>
                     @endif
                 </div>

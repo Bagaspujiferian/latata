@@ -29,7 +29,7 @@
                 <p class="text-xs text-[#6B7280] mt-0.5">Rekam jejak transaksi double-entry permanen dengan bukti `before &rarr; after` di setiap rupiah.</p>
             </div>
 
-            @if($demoSwitcherEnabled ?? false)
+            @if(config('nexatrade.demo_switcher_enabled'))
                 <form method="POST" action="{{ route('demo.wallet-topup') }}">
                     @csrf
                     <input type="hidden" name="amount" value="500000">

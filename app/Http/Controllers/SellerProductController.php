@@ -70,7 +70,7 @@ class SellerProductController extends Controller
             'primary_upload_index' => ['nullable', 'integer', 'min:0', 'max:5'],
             'attributes' => ['nullable', 'array'],
             'images' => ['nullable', 'array', 'max:6'],
-            'images.*' => ['file', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'images.*' => ['file', 'mimes:jpg,jpeg,png,webp', 'mimetypes:image/jpeg,image/png,image/webp', 'max:2048'],
         ]);
 
         try {
@@ -130,7 +130,7 @@ class SellerProductController extends Controller
             'delete_image_ids.*' => ['integer'],
             'primary_image_id' => ['nullable', 'integer'],
             'images' => ['nullable', 'array', 'max:6'],
-            'images.*' => ['file', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'images.*' => ['file', 'mimes:jpg,jpeg,png,webp', 'mimetypes:image/jpeg,image/png,image/webp', 'max:2048'],
         ]);
 
         try {

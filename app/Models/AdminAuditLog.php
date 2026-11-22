@@ -9,6 +9,17 @@ class AdminAuditLog extends Model
 {
     public const UPDATED_AT = null;
 
+    protected static function booted(): void
+    {
+        static::updating(function (): void {
+            throw new \LogicException('Ledger/Audit records are strictly immutable and append-only.');
+        });
+
+        static::deleting(function (): void {
+            throw new \LogicException('Ledger/Audit records are strictly immutable and append-only.');
+        });
+    }
+
     /** @var list<string> */
     protected $fillable = [
         'admin_id',

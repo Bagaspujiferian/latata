@@ -13,6 +13,7 @@ return [
     'digiflazz' => [
         'username' => env('DIGIFLAZZ_USERNAME', 'nexatrade_h2h_prod'),
         'api_key' => env('DIGIFLAZZ_API_KEY', 'digiflazz_secret_key_nexatrade_2026'),
+        'webhook_secret' => env('DIGIFLAZZ_WEBHOOK_SECRET', 'digiflazz_webhook_secret_nexatrade_2026'),
         'endpoint' => env('DIGIFLAZZ_ENDPOINT', 'https://api.digiflazz.com/v1/transaction'),
         'simulate_live_dispatch' => (bool) env('DIGIFLAZZ_SIMULATE', true),
     ],
@@ -32,6 +33,8 @@ return [
     'withdrawal_admin_fee' => 2500.00,
     'withdrawal_min_amount' => 10000.00,
     'invoice_expiry_minutes' => 30,
+    'flash_sale_invoice_ttl_minutes' => (int) env('NEXATRADE_FLASH_SALE_TTL_MINUTES', 15),
+    'max_unpaid_invoices_per_buyer' => (int) env('NEXATRADE_MAX_UNPAID_INVOICES', 3),
     'auto_complete_hours' => 24,
     'sla_badge_threshold_minutes' => 10.00,
 ];

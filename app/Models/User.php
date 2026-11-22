@@ -26,6 +26,9 @@ class User extends Authenticatable
         'wallet_pin_set_at',
         'role',
         'is_active',
+        'is_banned',
+        'banned_at',
+        'ban_reason',
     ];
 
     /** @var list<string> */
@@ -45,6 +48,8 @@ class User extends Authenticatable
             'wallet_pin_locked_until' => 'datetime',
             'wallet_pin_set_at' => 'datetime',
             'is_active' => 'boolean',
+            'is_banned' => 'boolean',
+            'banned_at' => 'datetime',
         ];
     }
 

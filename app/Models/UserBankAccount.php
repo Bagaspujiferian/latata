@@ -36,6 +36,12 @@ class UserBankAccount extends Model
         'is_primary',
     ];
 
+    /** @var list<string> */
+    protected $hidden = [
+        'account_blind_hash',
+        'active_account_lock_hash',
+    ];
+
     /** @return array<string, string> */
     protected function casts(): array
     {

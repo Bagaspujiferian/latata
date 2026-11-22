@@ -55,6 +55,34 @@ class DocumentExportService
         ]);
     }
 
+    /**
+     * Neutralize CSV/Excel formula injection (CWE-1236) while preserving legitimate numeric columns.
+     */
+    public function sanitizeCsvCell(mixed $value, bool $isNumericColumn = false): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        $str = (string) $value;
+        if ($str === '') {
+            return '';
+        }
+
+        if ($isNumericColumn) {
+            $trimmed = trim($str);
+            if (preg_match('/^-?\d+(\.\d+)?$/', $trimmed) === 1) {
+                return $trimmed;
+            }
+        }
+
+        if (preg_match('/^(?:[\t\r]| *[=+\-@\t\r])/', $str) === 1) {
+            return "'".$str;
+        }
+
+        return $str;
+    }
+
     public function streamSellerOrdersCsv(int $sellerId, ?string $from = null, ?string $to = null): StreamedResponse
     {
         $query = Order::with(['buyer', 'items'])
@@ -100,17 +128,17 @@ class DocumentExportService
                     ->implode('; ');
 
                 fputcsv($handle, [
-                    $order->order_code,
-                    $order->created_at?->format('Y-m-d H:i:s'),
-                    $order->buyer?->name ?? 'Buyer #'.$order->buyer_id,
-                    $order->delivery_method,
-                    $order->status,
-                    $itemSummary,
-                    number_format((float) $order->gross_amount, 2, '.', ''),
-                    number_format((float) $order->seller_discount_amount, 2, '.', ''),
-                    number_format((float) $order->platform_discount_amount, 2, '.', ''),
-                    number_format((float) $order->platform_commission, 2, '.', ''),
-                    number_format((float) $order->seller_escrow_amount, 2, '.', ''),
+                    $this->sanitizeCsvCell($order->order_code),
+                    $this->sanitizeCsvCell($order->created_at?->format('Y-m-d H:i:s')),
+                    $this->sanitizeCsvCell($order->buyer?->name ?? 'Buyer #'.$order->buyer_id),
+                    $this->sanitizeCsvCell($order->delivery_method),
+                    $this->sanitizeCsvCell($order->status),
+                    $this->sanitizeCsvCell($itemSummary),
+                    $this->sanitizeCsvCell(number_format((float) $order->gross_amount, 2, '.', ''), true),
+                    $this->sanitizeCsvCell(number_format((float) $order->seller_discount_amount, 2, '.', ''), true),
+                    $this->sanitizeCsvCell(number_format((float) $order->platform_discount_amount, 2, '.', ''), true),
+                    $this->sanitizeCsvCell(number_format((float) $order->platform_commission, 2, '.', ''), true),
+                    $this->sanitizeCsvCell(number_format((float) $order->seller_escrow_amount, 2, '.', ''), true),
                 ]);
             }
 
@@ -158,15 +186,15 @@ class DocumentExportService
 
             foreach ($mutations as $m) {
                 fputcsv($handle, [
-                    $m->created_at?->format('Y-m-d H:i:s'),
-                    $m->reference_code,
-                    $m->mutation_type,
-                    $m->balance_bucket,
-                    $m->direction,
-                    number_format((float) $m->amount, 2, '.', ''),
-                    number_format((float) $m->balance_before, 2, '.', ''),
-                    number_format((float) $m->balance_after, 2, '.', ''),
-                    $m->description,
+                    $this->sanitizeCsvCell($m->created_at?->format('Y-m-d H:i:s')),
+                    $this->sanitizeCsvCell($m->reference_code),
+                    $this->sanitizeCsvCell($m->mutation_type),
+                    $this->sanitizeCsvCell($m->balance_bucket),
+                    $this->sanitizeCsvCell($m->direction),
+                    $this->sanitizeCsvCell(number_format((float) $m->amount, 2, '.', ''), true),
+                    $this->sanitizeCsvCell(number_format((float) $m->balance_before, 2, '.', ''), true),
+                    $this->sanitizeCsvCell(number_format((float) $m->balance_after, 2, '.', ''), true),
+                    $this->sanitizeCsvCell($m->description),
                 ]);
             }
 

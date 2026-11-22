@@ -8,6 +8,7 @@ use App\Models\SellerProfile;
 use App\Models\User;
 use App\Models\WarrantyClaim;
 use DomainException;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -19,6 +20,7 @@ class AccountWarrantyService
         private readonly EscrowLedgerService $ledgerService,
         private readonly NotificationService $notificationService,
         private readonly AdminCmsAndAuditService $auditService,
+        private readonly SecureImageUploadService $imageUploadService,
     ) {}
 
     /**
@@ -105,11 +107,13 @@ class AccountWarrantyService
 
             $storedEvidencePaths = [];
             foreach (array_slice($evidenceFiles, 0, 4) as $file) {
-                // Store evidence STRICTLY on private local disk (NEVER public!)
-                $path = Storage::disk('local')->putFile("private/warranty-claims/{$orderId}", $file);
-                if (is_string($path)) {
-                    $storedEvidencePaths[] = $path;
-                }
+                // Store GD-sanitized evidence STRICTLY on private local disk (NEVER public!)
+                $storedEvidencePaths[] = $this->imageUploadService->storeSanitizedImage(
+                    $file,
+                    'local',
+                    "private/warranty-claims/{$orderId}",
+                    3072,
+                );
             }
 
             $warranty->status = 'claimed';
@@ -171,6 +175,10 @@ class AccountWarrantyService
             $claim = WarrantyClaim::where('id', $claimId)->lockForUpdate()->first();
             if (! $claim) {
                 throw new DomainException("Klaim garansi #{$claimId} tidak ditemukan.");
+            }
+
+            if ((int) $claim->buyer_id === $adminId || (int) $claim->seller_id === $adminId) {
+                throw new AuthorizationException('Conflict of Interest: Admin yang terlibat dalam pesanan dilarang memutus klaim garansinya sendiri.');
             }
 
             if (! in_array($claim->status, ['open', 'investigating'], true)) {

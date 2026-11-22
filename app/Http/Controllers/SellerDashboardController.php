@@ -14,6 +14,7 @@ use App\Models\WithdrawalRequest;
 use App\Services\ChatModerationService;
 use App\Services\OrderStateAndSlaService;
 use App\Services\ProductMerchandisingService;
+use App\Services\SecureImageUploadService;
 use App\Services\SellerCatalogService;
 use App\Services\StorefrontEngagementService;
 use App\Services\StorefrontService;
@@ -37,6 +38,7 @@ class SellerDashboardController extends Controller
         private readonly StorefrontEngagementService $engagementService,
         private readonly StorefrontService $storefrontService,
         private readonly WalletPinService $walletPinService,
+        private readonly SecureImageUploadService $imageUploadService,
     ) {}
 
     public function dashboard(Request $request): View
@@ -185,7 +187,7 @@ class SellerDashboardController extends Controller
     public function addProductImage(Request $request, int $id): RedirectResponse
     {
         $validated = $request->validate([
-            'image_file' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,svg', 'max:3072'],
+            'image_file' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'mimetypes:image/jpeg,image/png,image/webp', 'max:3072'],
             'image_url' => ['nullable', 'string', 'max:255'],
             'alt_text' => ['nullable', 'string', 'max:150'],
             'is_primary' => ['nullable', 'boolean'],
@@ -193,24 +195,22 @@ class SellerDashboardController extends Controller
 
         $imagePath = null;
 
-        if ($request->hasFile('image_file')) {
-            $file = $request->file('image_file');
-            $filename = 'prod-'.$id.'-'.Str::random(10).'.'.$file->getClientOriginalExtension();
-            $targetDir = public_path('uploads/products');
-            if (! is_dir($targetDir)) {
-                mkdir($targetDir, 0755, true);
-            }
-            $file->move($targetDir, $filename);
-            $imagePath = '/uploads/products/'.$filename;
-        } elseif (! empty($validated['image_url'])) {
-            $imagePath = trim((string) $validated['image_url']);
-        }
-
-        if ($imagePath === null) {
-            return back()->with('error', 'Unggah file gambar atau masukkan URL/path gambar produk.');
-        }
-
         try {
+            if ($request->hasFile('image_file')) {
+                $imagePath = $this->imageUploadService->storeSanitizedImage(
+                    $request->file('image_file'),
+                    'public',
+                    "products/{$id}",
+                    3072,
+                );
+            } elseif (! empty($validated['image_url'])) {
+                $imagePath = trim((string) $validated['image_url']);
+            }
+
+            if ($imagePath === null) {
+                return back()->with('error', 'Unggah file gambar atau masukkan URL/path gambar produk.');
+            }
+
             $this->merchandisingService->addProductImage(
                 productId: $id,
                 sellerId: $request->user()->id,
@@ -445,7 +445,7 @@ class SellerDashboardController extends Controller
             'store_name' => ['required', 'string', 'min:3', 'max:120'],
             'store_tagline' => ['nullable', 'string', 'max:150'],
             'store_bio' => ['nullable', 'string', 'max:500'],
-            'store_banner_file' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,svg', 'max:3072'],
+            'store_banner_file' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'mimetypes:image/jpeg,image/png,image/webp', 'max:3072'],
             'store_banner_url' => ['nullable', 'string', 'max:255'],
             'is_store_open' => ['nullable', 'boolean'],
             'auto_schedule_enabled' => ['nullable', 'boolean'],

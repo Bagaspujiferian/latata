@@ -22,6 +22,11 @@ class OrderItem extends Model
         'encrypted_delivery_payload',
     ];
 
+    /** @var list<string> */
+    protected $hidden = [
+        'encrypted_delivery_payload',
+    ];
+
     /** @return array<string, string> */
     protected function casts(): array
     {

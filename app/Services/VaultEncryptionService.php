@@ -166,14 +166,16 @@ class VaultEncryptionService
         }
 
         $requester = User::find($requestingUserId);
-        $isAuthorized = ((int) $order->buyer_id === $requestingUserId) || ($requester?->isAdmin() ?? false);
+        $isAdmin = $requester?->isAdmin() ?? false;
+        $isOwnerBuyer = (int) $order->buyer_id === $requestingUserId;
 
-        if (! $isAuthorized) {
+        if (! $isOwnerBuyer && ! $isAdmin) {
             throw new UnauthorizedVaultAccessException('Akses ditolak: hanya pembeli pemilik pesanan atau admin sengketa yang boleh membuka brankas AES-256.');
         }
 
-        if (! in_array($order->status, ['DELIVERED', 'COMPLETED', 'DISPUTED'], true)) {
-            throw new UnauthorizedVaultAccessException("Brankas belum dapat dibuka pada status pesanan [{$order->status}].");
+        $allowedStatuses = $isAdmin ? ['DELIVERED', 'COMPLETED', 'DISPUTED'] : ['DELIVERED', 'COMPLETED'];
+        if (! in_array($order->status, $allowedStatuses, true)) {
+            throw new UnauthorizedVaultAccessException("Brankas tidak dapat dibuka pada status pesanan [{$order->status}].");
         }
 
         if (empty($item->encrypted_delivery_payload)) {
@@ -181,6 +183,58 @@ class VaultEncryptionService
         }
 
         return Crypt::decryptString($item->encrypted_delivery_payload);
+    }
+
+    public function updateAvailableVaultItem(int $vaultId, int $sellerId, string $newPlaintext): ProductVault
+    {
+        $trimmed = trim($newPlaintext);
+        if ($trimmed === '') {
+            throw new DomainException('Isi payload brankas tidak boleh kosong.');
+        }
+
+        return DB::transaction(function () use ($vaultId, $sellerId, $trimmed): ProductVault {
+            $vault = ProductVault::with('product')->where('id', $vaultId)->lockForUpdate()->first();
+            if (! $vault || ! $vault->product || (int) $vault->product->seller_id !== $sellerId) {
+                throw new UnauthorizedVaultAccessException('Baris brankas tidak ditemukan atau bukan milik toko Anda.');
+            }
+
+            if (strtolower((string) $vault->status) !== 'available') {
+                throw new DomainException("Baris brankas berstatus [{$vault->status}] bersifat permanen dan tidak dapat diubah.");
+            }
+
+            $newHash = $this->computeBlindHash($trimmed);
+            $duplicate = DB::table('product_vaults')
+                ->where('payload_blind_hash', $newHash)
+                ->where('id', '!=', $vault->id)
+                ->exists();
+            if ($duplicate) {
+                throw new DomainException('Duplikat payload terdeteksi via HMAC-SHA256 Blind Index.');
+            }
+
+            $vault->payload_blind_hash = $newHash;
+            $vault->encrypted_payload = Crypt::encryptString($trimmed);
+            $vault->save();
+
+            return $vault->fresh();
+        });
+    }
+
+    public function deleteAvailableVaultItem(int $vaultId, int $sellerId): void
+    {
+        DB::transaction(function () use ($vaultId, $sellerId): void {
+            $vault = ProductVault::with('product')->where('id', $vaultId)->lockForUpdate()->first();
+            if (! $vault || ! $vault->product || (int) $vault->product->seller_id !== $sellerId) {
+                throw new UnauthorizedVaultAccessException('Baris brankas tidak ditemukan atau bukan milik toko Anda.');
+            }
+
+            if (strtolower((string) $vault->status) !== 'available') {
+                throw new DomainException("Baris brankas berstatus [{$vault->status}] bersifat permanen dan tidak dapat dihapus.");
+            }
+
+            $productId = (int) $vault->product_id;
+            $vault->delete();
+            $this->syncVaultStockWithinLock($productId);
+        });
     }
 
     public function maskPayload(string $raw): string

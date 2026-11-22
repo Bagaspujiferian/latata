@@ -23,6 +23,7 @@ class SellerProductCrudService
 
     public function __construct(
         private readonly VaultEncryptionService $vaultService,
+        private readonly SecureImageUploadService $imageUploadService,
     ) {}
 
     /**
@@ -97,10 +98,7 @@ class SellerProductCrudService
             }
 
             foreach (array_values($uploadedImages) as $idx => $file) {
-                $storedPath = Storage::disk('public')->putFile("products/{$product->id}", $file);
-                if (! is_string($storedPath)) {
-                    throw new DomainException('Gagal menyimpan foto produk.');
-                }
+                $storedPath = $this->imageUploadService->storeSanitizedImage($file, 'public', "products/{$product->id}", 2048);
 
                 ProductImage::create([
                     'product_id' => $product->id,
@@ -222,10 +220,7 @@ class SellerProductCrudService
 
             $nextSort = (int) ProductImage::where('product_id', $product->id)->max('sort_order') + 1;
             foreach ($newImages as $file) {
-                $storedPath = Storage::disk('public')->putFile("products/{$product->id}", $file);
-                if (! is_string($storedPath)) {
-                    throw new DomainException('Gagal menyimpan foto produk baru.');
-                }
+                $storedPath = $this->imageUploadService->storeSanitizedImage($file, 'public', "products/{$product->id}", 2048);
 
                 ProductImage::create([
                     'product_id' => $product->id,

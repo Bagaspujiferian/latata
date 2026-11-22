@@ -62,6 +62,10 @@ class AccountRecoveryController extends Controller
                 newPassword: $validated['password'],
             );
 
+            if ($request->hasSession()) {
+                $request->session()->regenerate();
+            }
+
             return redirect()
                 ->route('login')
                 ->with('success', 'Kata sandi akun berhasil direset dan sesi lama telah dihentikan. Silakan masuk dengan kata sandi baru.');
@@ -111,6 +115,10 @@ class AccountRecoveryController extends Controller
                 plainToken: $validated['token'],
                 newPin: $validated['new_pin'],
             );
+
+            if ($request->hasSession()) {
+                $request->session()->regenerate();
+            }
 
             return redirect()
                 ->route('account.security')

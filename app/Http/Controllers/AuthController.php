@@ -43,6 +43,15 @@ class AuthController extends Controller
                 ->withErrors(['email' => 'Email atau kata sandi tidak sesuai, atau akun sedang nonaktif.']);
         }
 
+        if ((bool) $user->is_banned) {
+            $reason = trim((string) ($user->ban_reason ?? '')) ?: 'Akun Anda ditangguhkan oleh Tim Keamanan NexaTrade.';
+
+            return back()
+                ->withInput($request->only('email', 'remember'))
+                ->with('error', "Akun Anda dibekukan: {$reason}")
+                ->withErrors(['email' => "Akun Anda dibekukan: {$reason}"]);
+        }
+
         Auth::login($user, $request->boolean('remember'));
         $request->session()->regenerate();
         $request->session()->forget('nexatrade_logged_out');
@@ -137,6 +146,16 @@ class AuthController extends Controller
             'password' => Hash::make($validated['password']),
         ]);
 
+        // Clear any pending password reset tokens & rotate active session identifier.
+        DB::table('password_reset_tokens')->where('email', strtolower($user->email))->delete();
+        if ($request->hasSession()) {
+            $request->session()->regenerate();
+            DB::table('sessions')
+                ->where('user_id', $user->id)
+                ->where('id', '!=', $request->session()->getId())
+                ->delete();
+        }
+
         return back()->with('success', 'Kata sandi akun berhasil diperbarui.');
     }
 
@@ -153,6 +172,15 @@ class AuthController extends Controller
                 pin: $validated['pin'],
                 currentPassword: $validated['current_password'],
             );
+
+            DB::table('wallet_pin_reset_tokens')
+                ->where('user_id', $request->user()->id)
+                ->whereNull('used_at')
+                ->delete();
+
+            if ($request->hasSession()) {
+                $request->session()->regenerate();
+            }
 
             return back()->with('success', 'PIN Dompet 6-digit berhasil diaktifkan! Seluruh penarikan saldo, checkout dompet, dan pelunasan kini terlindungi PIN.');
         } catch (DomainException $e) {

@@ -12,6 +12,7 @@ use App\Models\UserBankAccount;
 use App\Models\WithdrawalRequest;
 use App\Support\StateTransitionGuard;
 use DomainException;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -312,6 +313,10 @@ class OrderStateAndSlaService
             $orderRow = DB::table('orders')->where('id', $orderId)->lockForUpdate()->first();
             if (! $orderRow) {
                 throw new DomainException("Pesanan #{$orderId} tidak ditemukan.");
+            }
+
+            if ((int) $orderRow->buyer_id === $adminId || (int) $orderRow->seller_id === $adminId) {
+                throw new AuthorizationException('Conflict of Interest: Admin yang terlibat sebagai pembeli atau penjual dilarang memutus sengketanya sendiri.');
             }
 
             if ($verdict === 'RELEASE_TO_SELLER') {
@@ -756,6 +761,10 @@ class OrderStateAndSlaService
                 throw new DomainException("Permintaan penarikan #{$withdrawalId} tidak ditemukan.");
             }
 
+            if ((int) $row->user_id === $adminId) {
+                throw new AuthorizationException('Conflict of Interest: Admin dilarang menyetujui penarikan saldo miliknya sendiri.');
+            }
+
             if ($row->status !== 'PENDING') {
                 throw new DomainException("Penarikan {$row->withdraw_code} sudah diproses sebelumnya (status: {$row->status}).");
             }
@@ -794,6 +803,10 @@ class OrderStateAndSlaService
             $row = DB::table('withdrawal_requests')->where('id', $withdrawalId)->lockForUpdate()->first();
             if (! $row) {
                 throw new DomainException("Permintaan penarikan #{$withdrawalId} tidak ditemukan.");
+            }
+
+            if ((int) $row->user_id === $adminId) {
+                throw new AuthorizationException('Conflict of Interest: Admin dilarang menyetujui penarikan saldo miliknya sendiri.');
             }
 
             if ($row->status !== 'PENDING') {

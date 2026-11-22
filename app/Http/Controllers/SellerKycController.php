@@ -40,8 +40,8 @@ class SellerKycController extends Controller
             'proposed_store_tagline' => ['nullable', 'string', 'max:150'],
             'full_legal_name' => ['required', 'string', 'min:3', 'max:120'],
             'nik' => ['required', 'string', 'regex:/^\d{16}$/'],
-            'id_card_file' => ['required', 'file', 'mimes:jpg,jpeg,png,webp', 'max:3072'],
-            'selfie_file' => ['required', 'file', 'mimes:jpg,jpeg,png,webp', 'max:3072'],
+            'id_card_file' => ['required', 'file', 'mimes:jpg,jpeg,png,webp', 'mimetypes:image/jpeg,image/png,image/webp', 'max:3072'],
+            'selfie_file' => ['required', 'file', 'mimes:jpg,jpeg,png,webp', 'mimetypes:image/jpeg,image/png,image/webp', 'max:3072'],
         ], [
             'nik.regex' => 'NIK wajib terdiri dari tepat 16 digit angka sesuai e-KTP.',
             'proposed_store_slug.regex' => 'URL slug toko hanya boleh berisi huruf, angka, dan tanda hubung (-).',

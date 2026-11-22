@@ -46,7 +46,7 @@ class WarrantyController extends Controller
             'reason_category' => ['required', Rule::in(array_keys(WarrantyClaim::REASON_LABELS))],
             'description' => ['required', 'string', 'min:10', 'max:2000'],
             'evidence' => ['nullable', 'array', 'max:4'],
-            'evidence.*' => ['file', 'mimes:jpg,jpeg,png,webp', 'max:3072'],
+            'evidence.*' => ['file', 'mimes:jpg,jpeg,png,webp', 'mimetypes:image/jpeg,image/png,image/webp', 'max:3072'],
         ]);
 
         try {

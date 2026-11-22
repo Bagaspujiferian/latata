@@ -13,9 +13,13 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->appendToGroup('web', \App\Http\Middleware\EnsureUserNotBanned::class);
+        $middleware->appendToGroup('web', \App\Http\Middleware\AddSecurityHeaders::class);
+
         $middleware->alias([
             'role' => \App\Http\Middleware\EnsureUserRole::class,
             'idempotent' => \App\Http\Middleware\EnsureIdempotentRequest::class,
+            'simulation.only' => \App\Http\Middleware\EnsureSimulationModeEnabled::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

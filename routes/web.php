@@ -49,9 +49,13 @@ Route::post('/reset-password', [AccountRecoveryController::class, 'resetPassword
     ->middleware('throttle:auth-recovery')
     ->name('password.update');
 
-// 1-Click Demo Account Switcher & Demo Wallet Top-Up (Guarded by config('nexatrade.demo_switcher_enabled'))
-Route::post('/demo/switch-user', [DemoAuthController::class, 'switchUser'])->name('demo.switch-user');
-Route::post('/demo/wallet-topup', [DemoAuthController::class, 'demoTopup'])->middleware('auth')->name('demo.wallet-topup');
+// 1-Click Demo Account Switcher & Demo Wallet Top-Up (Guarded by simulation.only middleware -> HTTP 404 in production)
+Route::post('/demo/switch-user', [DemoAuthController::class, 'switchUser'])
+    ->middleware('simulation.only')
+    ->name('demo.switch-user');
+Route::post('/demo/wallet-topup', [DemoAuthController::class, 'demoTopup'])
+    ->middleware(['auth', 'simulation.only'])
+    ->name('demo.wallet-topup');
 
 // Authenticated Buyer, Security/PIN, Inbox Chat, Notifications, Bank Accounts, KYC, Wishlist, Exports & Checkout
 Route::middleware(['auth'])->group(function (): void {
@@ -115,7 +119,9 @@ Route::middleware(['auth'])->group(function (): void {
 
     Route::get('/invoices/{invoice_code}', [CheckoutController::class, 'showInvoice'])->name('invoices.show');
     Route::get('/invoices/{invoice_code}/pdf', [ExportController::class, 'invoicePdf'])->name('invoices.pdf');
-    Route::post('/invoices/{invoice_code}/simulate-pay', [CheckoutController::class, 'simulateMidtransPay'])->name('invoices.simulate-pay');
+    Route::post('/invoices/{invoice_code}/simulate-pay', [CheckoutController::class, 'simulateMidtransPay'])
+        ->middleware('simulation.only')
+        ->name('invoices.simulate-pay');
 
     // Buyer Orders, PDF Receipt, Anti-Hackback Warranties, Reports & Wallet
     Route::get('/buyer/warranties', [WarrantyController::class, 'index'])->name('buyer.warranties');
@@ -142,6 +148,7 @@ Route::middleware(['auth'])->group(function (): void {
     Route::get('/buyer/wallet/topup/{topup_code}', [WalletTopUpController::class, 'show'])
         ->name('buyer.wallet.topup.show');
     Route::post('/buyer/wallet/topup/{topup_code}/simulate-pay', [WalletTopUpController::class, 'simulatePay'])
+        ->middleware('simulation.only')
         ->name('buyer.wallet.topup.simulate-pay');
 });
 
@@ -187,7 +194,7 @@ Route::prefix('seller')->name('seller.')->middleware(['auth', 'role:seller'])->g
         ->middleware(['idempotent', 'throttle:wallet-sensitive'])
         ->name('wallet.repay-debt');
     Route::post('/wallet/repay-debt-gateway', [SellerDebtController::class, 'repayViaGateway'])
-        ->middleware('throttle:wallet-sensitive')
+        ->middleware(['simulation.only', 'throttle:wallet-sensitive'])
         ->name('wallet.repay-debt-gateway');
     Route::get('/bank-accounts', [BankAccountController::class, 'index'])->name('bank-accounts');
 
@@ -257,6 +264,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:admin'])->grou
     Route::post('/reports/{report}/resolve', [AdminCmsController::class, 'resolveReport'])->name('reports.resolve');
     Route::get('/audit-logs', [AdminCmsController::class, 'auditLogs'])->name('audit-logs');
 
-    Route::get('/chaos-lab', [AdminChaosLabController::class, 'chaosLab'])->name('chaos-lab');
-    Route::post('/chaos-lab/run/{scenario}', [AdminChaosLabController::class, 'runScenario'])->name('chaos-lab.run');
+    Route::get('/chaos-lab', [AdminChaosLabController::class, 'chaosLab'])
+        ->middleware('simulation.only')
+        ->name('chaos-lab');
+    Route::post('/chaos-lab/run/{scenario}', [AdminChaosLabController::class, 'runScenario'])
+        ->middleware('simulation.only')
+        ->name('chaos-lab.run');
 });

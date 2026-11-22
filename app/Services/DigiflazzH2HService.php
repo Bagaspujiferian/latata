@@ -18,6 +18,42 @@ class DigiflazzH2HService
         private readonly ChatModerationService $chatModerationService,
     ) {}
 
+    public function generateWebhookSignature(string $rawBody): string
+    {
+        $secret = (string) config('nexatrade.digiflazz.webhook_secret', config('nexatrade.digiflazz.api_key'));
+
+        return 'sha1='.hash_hmac('sha1', $rawBody, $secret);
+    }
+
+    /**
+     * Timing-safe signature verification for incoming Digiflazz H2H webhooks via hash_equals().
+     */
+    public function verifyWebhookSignature(
+        string $rawBody,
+        ?string $hubSignatureHeader = null,
+        ?string $refId = null,
+        ?string $signField = null,
+    ): bool {
+        $cleanHub = trim((string) ($hubSignatureHeader ?? ''));
+        if ($cleanHub !== '') {
+            $expectedHub = $this->generateWebhookSignature($rawBody);
+
+            return hash_equals($expectedHub, $cleanHub);
+        }
+
+        $cleanRef = trim((string) ($refId ?? ''));
+        $cleanSign = trim((string) ($signField ?? ''));
+        if ($cleanRef !== '' && $cleanSign !== '') {
+            $username = (string) config('nexatrade.digiflazz.username');
+            $apiKey = (string) config('nexatrade.digiflazz.api_key');
+            $expectedMd5 = md5($username.$apiKey.$cleanRef);
+
+            return hash_equals($expectedMd5, $cleanSign);
+        }
+
+        return false;
+    }
+
     /**
      * Poll H2H provider status using the EXACT existing h2h_reference_id (never generates a new ref_id).
      *

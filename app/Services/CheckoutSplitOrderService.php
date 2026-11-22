@@ -5,8 +5,10 @@ namespace App\Services;
 use App\Exceptions\InsufficientVaultStockException;
 use App\Exceptions\InsufficientWalletBalanceException;
 use App\Exceptions\InvalidGameInputException;
+use App\Exceptions\PriceChangedException;
 use App\Exceptions\SelfDealingException;
 use App\Exceptions\StoreClosedException;
+use App\Exceptions\TooManyUnpaidInvoicesException;
 use App\Models\CartItem;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -42,6 +44,7 @@ class CheckoutSplitOrderService
         bool $clearCart = true,
         ?string $platformVoucherCode = null,
         array $sellerVoucherCodes = [],
+        ?float $expectedGrandTotal = null,
     ): PaymentInvoice {
         if (! in_array($paymentMode, ['gateway_only', 'wallet_full', 'hybrid_wallet_gateway'], true)) {
             throw new DomainException("Mode pembayaran tidak valid: [{$paymentMode}].");
@@ -56,11 +59,27 @@ class CheckoutSplitOrderService
             $clearCart,
             $platformVoucherCode,
             $sellerVoucherCodes,
+            $expectedGrandTotal,
         ): PaymentInvoice {
             $rawItems = $this->resolveItems($buyerId, $explicitItems);
 
             if (empty($rawItems)) {
                 throw new DomainException('Keranjang belanja masih kosong.');
+            }
+
+            // ANTI-INVENTORY HOARDING GUARD: Lock buyer user row & cap concurrent active UNPAID invoices.
+            DB::table('users')->where('id', $buyerId)->lockForUpdate()->first();
+            $maxUnpaidInvoices = max(1, (int) config('nexatrade.max_unpaid_invoices_per_buyer', 3));
+            $activeUnpaidCount = (int) DB::table('payment_invoices')
+                ->where('buyer_id', $buyerId)
+                ->where('status', 'UNPAID')
+                ->where('expires_at', '>', now())
+                ->count();
+
+            if ($activeUnpaidCount >= $maxUnpaidInvoices) {
+                throw new TooManyUnpaidInvoicesException(
+                    "Anda masih memiliki {$activeUnpaidCount} tagihan belum dibayar. Selesaikan atau batalkan tagihan sebelumnya terlebih dahulu."
+                );
             }
 
             // DEADLOCK PREVENTION LAW: Sort all unique product IDs ascending BEFORE lockForUpdate().
@@ -92,6 +111,7 @@ class CheckoutSplitOrderService
 
             // Pre-validate every item: active, self-dealing guard, store open guard, dynamic inputs, min/max, stock.
             $validatedItems = [];
+            $hasFlashSaleItem = false;
             foreach ($rawItems as $entry) {
                 $pid = (int) $entry['product_id'];
                 $qty = (int) $entry['quantity'];
@@ -104,7 +124,7 @@ class CheckoutSplitOrderService
 
                 // SELF-DEALING GUARD (Anti Wash-Trading Law #8)
                 if ((int) $lockedRow->seller_id === $buyerId) {
-                    throw new SelfDealingException("Dilarang membeli produk milik toko Anda sendiri ({$product->title}).");
+                    throw new SelfDealingException("Anda tidak dapat membeli produk dari toko Anda sendiri ({$product->title}).");
                 }
 
                 $category = $product->gameCategory;
@@ -147,6 +167,10 @@ class CheckoutSplitOrderService
                     quantity: $qty,
                     regularPrice: $regularPrice,
                 );
+
+                if ($flashLock !== null) {
+                    $hasFlashSaleItem = true;
+                }
 
                 $validatedItems[] = [
                     'product' => $product,
@@ -324,8 +348,21 @@ class CheckoutSplitOrderService
             $payableAfterWallet = round($buyerPayableSubtotal - $walletUsedAmount, 2);
             $grandTotal = round($payableAfterWallet + $gatewayFee, 2);
 
+            // Anti Bait-and-Switch (TOCTOU) Guard: verify server-calculated total matches buyer's displayed total.
+            if ($expectedGrandTotal !== null) {
+                $actualDisplayedTotal = $paymentMode === 'wallet_full' ? $buyerPayableSubtotal : $grandTotal;
+                if (abs($actualDisplayedTotal - round($expectedGrandTotal, 2)) > 0.01) {
+                    throw new PriceChangedException(
+                        'Harga produk atau promo berubah saat checkout. Silakan muat ulang keranjang.'
+                    );
+                }
+            }
+
             $invoiceCode = 'INV-'.now()->format('Ymd').'-'.strtoupper(Str::random(6));
-            $expiresAt = now()->addMinutes((int) config('nexatrade.invoice_expiry_minutes', 30));
+            $expiryMinutes = $hasFlashSaleItem
+                ? max(1, (int) config('nexatrade.flash_sale_invoice_ttl_minutes', 15))
+                : max(1, (int) config('nexatrade.invoice_expiry_minutes', 30));
+            $expiresAt = now()->addMinutes($expiryMinutes);
             $snapToken = $grandTotal > 0
                 ? 'SNAP-'.strtolower(hash('sha256', $invoiceCode.'|'.$buyerId.'|'.microtime(true)))
                 : null;

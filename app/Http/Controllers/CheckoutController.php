@@ -199,7 +199,7 @@ class CheckoutController extends Controller
         return [$cartItems, array_values($groupedPreview), round($subtotal, 2)];
     }
 
-    public function addToCart(Request $request): RedirectResponse
+    public function addToCart(Request $request): RedirectResponse|JsonResponse
     {
         $user = $request->user();
         $validated = $request->validate([
@@ -217,7 +217,11 @@ class CheckoutController extends Controller
         $product = Product::with(['gameCategory', 'sellerProfile'])->findOrFail((int) $validated['product_id']);
 
         if ((int) $product->seller_id === (int) $user->id) {
-            return back()->with('error', 'Self-Dealing Guard Aktif: Anda dilarang membeli produk milik toko Anda sendiri.');
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Anda tidak dapat membeli produk dari toko Anda sendiri.'], 422);
+            }
+
+            return back()->with('error', 'Anda tidak dapat membeli produk dari toko Anda sendiri.');
         }
 
         $inputs = $validated['game_inputs'] ?? [];
@@ -295,7 +299,7 @@ class CheckoutController extends Controller
         return back()->with('success', 'Item dihapus dari keranjang.');
     }
 
-    public function processCheckout(Request $request): RedirectResponse
+    public function processCheckout(Request $request): RedirectResponse|JsonResponse
     {
         $user = $request->user();
         $validated = $request->validate([
@@ -306,7 +310,21 @@ class CheckoutController extends Controller
             'seller_voucher_codes' => ['nullable', 'array'],
             'seller_voucher_codes.*' => ['nullable', 'string', 'max:40'],
             'wallet_pin' => ['nullable', 'string', 'max:6'],
+            'expected_grand_total' => ['nullable', 'numeric', 'min:0'],
         ]);
+
+        // Defense-in-depth Self-Dealing Guard before service transaction
+        $hasOwnProductInCart = CartItem::where('user_id', $user->id)
+            ->whereHas('product', fn ($q) => $q->where('seller_id', $user->id))
+            ->exists();
+        if ($hasOwnProductInCart) {
+            $msg = 'Anda tidak dapat membeli produk dari toko Anda sendiri.';
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 422);
+            }
+
+            return back()->with('error', $msg);
+        }
 
         $sellerVoucherCodes = [];
         foreach ($validated['seller_voucher_codes'] ?? [] as $sid => $code) {
@@ -330,6 +348,7 @@ class CheckoutController extends Controller
                 clearCart: true,
                 platformVoucherCode: filled($validated['platform_voucher_code'] ?? null) ? trim((string) $validated['platform_voucher_code']) : null,
                 sellerVoucherCodes: $sellerVoucherCodes,
+                expectedGrandTotal: isset($validated['expected_grand_total']) ? (float) $validated['expected_grand_total'] : null,
             );
 
             if ($invoice->status === 'PAID') {
@@ -340,6 +359,13 @@ class CheckoutController extends Controller
             return redirect()->route('invoices.show', $invoice->invoice_code)
                 ->with('success', "Tagihan induk {$invoice->invoice_code} berhasil dibuat untuk ".$invoice->orders->count().' toko.');
         } catch (DomainException $e) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => $e->getMessage(),
+                ], 422);
+            }
+
             return back()->withInput()->with('error', $e->getMessage());
         }
     }

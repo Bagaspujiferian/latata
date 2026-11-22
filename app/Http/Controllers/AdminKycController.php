@@ -6,6 +6,7 @@ use App\Models\ConversationMessage;
 use App\Models\SellerKycVerification;
 use App\Services\SellerKycService;
 use DomainException;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -75,7 +76,12 @@ class AdminKycController extends Controller
         }
 
         $privatePath = $type === 'id_card' ? $kyc->id_card_private_path : $kyc->selfie_private_path;
-        if (! $privatePath || ! Storage::disk('local')->exists($privatePath)) {
+        if (
+            ! $privatePath
+            || ! str_starts_with($privatePath, 'private/kyc/')
+            || str_contains($privatePath, '..')
+            || ! Storage::disk('local')->exists($privatePath)
+        ) {
             abort(404, 'Berkas KYC tidak ditemukan di penyimpanan privat.');
         }
 
@@ -92,6 +98,8 @@ class AdminKycController extends Controller
 
             return redirect()->route('admin.kyc.index', ['tab' => 'approved'])
                 ->with('success', "KYC #{$approved->id} disetujui! Akun {$approved->user->name} resmi di-upgrade ke Seller ({$approved->proposed_store_name}) lengkap dengan 7 hari jadwal operasional.");
+        } catch (AuthorizationException $e) {
+            abort(403, $e->getMessage());
         } catch (DomainException $e) {
             return back()->with('error', $e->getMessage());
         }
@@ -108,6 +116,8 @@ class AdminKycController extends Controller
 
             return redirect()->route('admin.kyc.index', ['tab' => 'rejected'])
                 ->with('success', "KYC #{$rejected->id} ditolak. Kunci NIK & pengajuan dilepas agar pemohon dapat mengajukan ulang dengan dokumen yang benar.");
+        } catch (AuthorizationException $e) {
+            abort(403, $e->getMessage());
         } catch (DomainException $e) {
             return back()->with('error', $e->getMessage());
         }

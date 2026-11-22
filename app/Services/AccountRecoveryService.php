@@ -199,6 +199,13 @@ class AccountRecoveryService
                     'used_at' => now(),
                 ]);
 
+            // Invalidate any other stale unused PIN reset tokens for this user.
+            DB::table('wallet_pin_reset_tokens')
+                ->where('user_id', $userId)
+                ->where('id', '!=', $tokenRow->id)
+                ->whereNull('used_at')
+                ->delete();
+
             DB::afterCommit(function () use ($userId): void {
                 $this->notificationService->notify(
                     userId: $userId,

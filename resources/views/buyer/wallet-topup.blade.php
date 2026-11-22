@@ -60,15 +60,21 @@
                 </div>
 
                 @if($topup->status === 'UNPAID')
-                    <form method="POST" action="{{ route('buyer.wallet.topup.simulate-pay', $topup->topup_code) }}"
-                          x-data="{ paying: false }" @submit="paying = true" class="pt-2">
-                        @csrf
-                        <button type="submit" :disabled="paying"
-                                class="btn-tactile w-full h-11 rounded-xl bg-[#00AA5B] hover:bg-[#00924E] text-white text-sm font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-65">
-                            <svg x-show="paying" x-cloak class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity="0.25" stroke-width="3"/><path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
-                            <span x-text="paying ? 'Memproses Pelunasan Idempoten...' : 'Simulasi Bayar Lunas Top-Up'"></span>
-                        </button>
-                    </form>
+                    @if(config('nexatrade.demo_switcher_enabled'))
+                        <form method="POST" action="{{ route('buyer.wallet.topup.simulate-pay', $topup->topup_code) }}"
+                              x-data="{ paying: false }" @submit="paying = true" class="pt-2">
+                            @csrf
+                            <button type="submit" :disabled="paying"
+                                    class="btn-tactile w-full h-11 rounded-xl bg-[#00AA5B] hover:bg-[#00924E] text-white text-sm font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-65">
+                                <svg x-show="paying" x-cloak class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity="0.25" stroke-width="3"/><path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+                                <span x-text="paying ? 'Memproses Pelunasan Idempoten...' : 'Simulasi Bayar Lunas Top-Up'"></span>
+                            </button>
+                        </form>
+                    @else
+                        <div class="p-4 rounded-xl bg-[#F8FAFC] border border-[#E4E8EE] text-[#4B5563]">
+                            Selesaikan pembayaran Top-Up melalui kanal resmi <strong class="uppercase text-[#111827]">{{ str_replace('_', ' ', $topup->payment_channel) }}</strong>. Saldo akan masuk otomatis setelah webhook Midtrans terverifikasi.
+                        </div>
+                    @endif
                 @elseif($topup->status === 'PAID')
                     <div class="p-4 rounded-xl bg-[#ECFDF5] border border-[#A7F3D0] text-[#047857] flex items-center justify-between gap-3">
                         <div class="flex items-center gap-2.5">

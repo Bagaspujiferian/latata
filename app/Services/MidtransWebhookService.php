@@ -17,6 +17,8 @@ class MidtransWebhookService
         private readonly OrderFulfillmentDispatcher $fulfillmentDispatcher,
         private readonly OrderStateAndSlaService $orderStateAndSlaService,
         private readonly VoucherAccountingService $voucherService,
+        private readonly WalletTopUpService $walletTopUpService,
+        private readonly NotificationService $notificationService,
     ) {}
 
     public function generateSignature(string $orderId, string $statusCode, string $grossAmount): string
@@ -97,6 +99,116 @@ class MidtransWebhookService
                 ];
             }
 
+            // Explicit prefix separation: TOPUP- routes strictly to wallet_topups; INV- routes strictly to payment_invoices.
+            $isPaidSignal = ($transactionStatus === 'settlement')
+                || ($transactionStatus === 'capture' && $fraudStatus !== 'challenge');
+
+            if (str_starts_with($orderId, 'TOPUP-')) {
+                $topupRow = DB::table('wallet_topups')
+                    ->where('topup_code', $orderId)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $topupRow) {
+                    $log = PaymentWebhookLog::create([
+                        'provider' => 'midtrans',
+                        'idempotency_key' => $idempotencyKey,
+                        'signature_valid' => true,
+                        'http_status' => 404,
+                        'raw_payload' => $payload,
+                        'processing_notes' => 'TOPUP_NOT_FOUND',
+                        'created_at' => now(),
+                    ]);
+
+                    return [
+                        'http_status' => 404,
+                        'signature_valid' => true,
+                        'idempotent_replay' => false,
+                        'webhook_log_id' => $log->id,
+                        'message' => "Tagihan Top-Up [{$orderId}] tidak ditemukan.",
+                    ];
+                }
+
+                if ($isPaidSignal) {
+                    $expectedTopupAmount = round((float) $topupRow->amount, 2);
+                    $reportedGross = round((float) $grossAmount, 2);
+
+                    if (abs($expectedTopupAmount - $reportedGross) > 0.01) {
+                        throw new FinancialInvariantException(
+                            "Top-Up gross amount mismatch on {$orderId}: expected {$expectedTopupAmount}, got {$reportedGross}."
+                        );
+                    }
+
+                    $settledTopup = $this->walletTopUpService->settleTopUp($orderId, $transactionId);
+
+                    $log = PaymentWebhookLog::create([
+                        'provider' => 'midtrans',
+                        'idempotency_key' => $idempotencyKey,
+                        'signature_valid' => true,
+                        'http_status' => 200,
+                        'raw_payload' => $payload,
+                        'processing_notes' => 'WALLET_TOPUP_SETTLED',
+                        'created_at' => now(),
+                    ]);
+
+                    return [
+                        'http_status' => 200,
+                        'signature_valid' => true,
+                        'idempotent_replay' => false,
+                        'topup_code' => $settledTopup->topup_code,
+                        'topup_status' => $settledTopup->status,
+                        'webhook_log_id' => $log->id,
+                        'message' => 'Midtrans wallet top-up settlement verified and credited (Anti-Gestun).',
+                    ];
+                }
+
+                if (in_array($transactionStatus, ['expire', 'cancel', 'deny'], true) && $topupRow->status === 'UNPAID') {
+                    DB::table('wallet_topups')->where('id', $topupRow->id)->update([
+                        'status' => 'EXPIRED',
+                        'updated_at' => now(),
+                    ]);
+                }
+
+                $log = PaymentWebhookLog::create([
+                    'provider' => 'midtrans',
+                    'idempotency_key' => $idempotencyKey,
+                    'signature_valid' => true,
+                    'http_status' => 200,
+                    'raw_payload' => $payload,
+                    'processing_notes' => "TOPUP_NON_FINAL_STATUS_{$transactionStatus}",
+                    'created_at' => now(),
+                ]);
+
+                return [
+                    'http_status' => 200,
+                    'signature_valid' => true,
+                    'idempotent_replay' => false,
+                    'topup_code' => $orderId,
+                    'webhook_log_id' => $log->id,
+                    'message' => "Webhook top-up status [{$transactionStatus}] dicatat.",
+                ];
+            }
+
+            if (! str_starts_with($orderId, 'INV-')) {
+                $log = PaymentWebhookLog::create([
+                    'provider' => 'midtrans',
+                    'idempotency_key' => $idempotencyKey,
+                    'signature_valid' => true,
+                    'http_status' => 422,
+                    'raw_payload' => $payload,
+                    'processing_notes' => 'REJECTED_UNKNOWN_ORDER_ID_PREFIX',
+                    'created_at' => now(),
+                ]);
+
+                return [
+                    'http_status' => 422,
+                    'signature_valid' => true,
+                    'idempotent_replay' => false,
+                    'webhook_log_id' => $log->id,
+                    'message' => 'Prefix order_id tidak dikenali (wajib INV- atau TOPUP-).',
+                ];
+            }
+
             $invoiceRow = DB::table('payment_invoices')
                 ->where('invoice_code', $orderId)
                 ->lockForUpdate()
@@ -122,9 +234,6 @@ class MidtransWebhookService
                 ];
             }
 
-            $isPaidSignal = ($transactionStatus === 'settlement')
-                || ($transactionStatus === 'capture' && $fraudStatus !== 'challenge');
-
             if ($isPaidSignal) {
                 $expectedGross = round((float) $invoiceRow->grand_total, 2);
                 $reportedGross = round((float) $grossAmount, 2);
@@ -135,9 +244,24 @@ class MidtransWebhookService
                     );
                 }
 
-                // ZOMBIE LATE PAYMENT RECOVERY: invoice already EXPIRED -> refund 100% of grand_total to buyer wallet!
+                // Idempotent guard if already recovered as PAID_LATE_REFUNDED by an earlier webhook with different status_code
+                if ($invoiceRow->status === 'PAID_LATE_REFUNDED') {
+                    return [
+                        'http_status' => 200,
+                        'signature_valid' => true,
+                        'idempotent_replay' => true,
+                        'zombie_recovered' => true,
+                        'invoice_code' => $invoiceRow->invoice_code,
+                        'invoice_status' => 'PAID_LATE_REFUNDED',
+                        'mutation_reference' => "LATEPAY-{$invoiceRow->invoice_code}",
+                        'message' => 'Late payment refund already processed idempotently.',
+                    ];
+                }
+
+                // LATE-PAYMENT WEBHOOK SAFE REFUND: invoice already EXPIRED -> NEVER re-lock stock/fulfill;
+                // idempotently refund 100% of grand_total to buyer available_balance via LATE_PAYMENT_REFUND!
                 if ($invoiceRow->status === 'EXPIRED') {
-                    StateTransitionGuard::assertInvoiceTransition('EXPIRED', 'PAID_LATE_REFUNDED', "Zombie Payment {$orderId}");
+                    StateTransitionGuard::assertInvoiceTransition('EXPIRED', 'PAID_LATE_REFUNDED', "Late Payment {$orderId}");
 
                     DB::table('payment_invoices')->where('id', $invoiceRow->id)->update([
                         'status' => 'PAID_LATE_REFUNDED',
@@ -146,7 +270,7 @@ class MidtransWebhookService
                         'updated_at' => now(),
                     ]);
 
-                    $zombieMutation = $this->ledgerService->creditZombiePaymentRefund(
+                    $lateMutation = $this->ledgerService->creditLatePaymentRefund(
                         buyerId: (int) $invoiceRow->buyer_id,
                         invoiceId: (int) $invoiceRow->id,
                         amount: $expectedGross,
@@ -159,9 +283,25 @@ class MidtransWebhookService
                         'signature_valid' => true,
                         'http_status' => 200,
                         'raw_payload' => $payload,
-                        'processing_notes' => "ZOMBIE_PAYMENT_RECOVERED: ref={$zombieMutation->reference_code}",
+                        'processing_notes' => "LATE_PAYMENT_REFUNDED: ref={$lateMutation->reference_code}",
                         'created_at' => now(),
                     ]);
+
+                    $buyerId = (int) $invoiceRow->buyer_id;
+                    $invCode = (string) $invoiceRow->invoice_code;
+                    $invId = (int) $invoiceRow->id;
+
+                    DB::afterCommit(function () use ($buyerId, $invCode, $invId, $expectedGross): void {
+                        $this->notificationService->notify(
+                            userId: $buyerId,
+                            category: 'escrow',
+                            title: "Pembayaran Terlambat {$invCode} Dikembalikan ke Dompet",
+                            body: 'Tagihan telah melewati batas waktu saat pembayaran masuk. Dana Rp '.number_format($expectedGross, 0, ',', '.').' telah dikembalikan otomatis ke Saldo Aktif Anda.',
+                            actionUrl: '/buyer/wallet',
+                            refType: 'payment_invoice',
+                            refId: $invId,
+                        );
+                    });
 
                     return [
                         'http_status' => 200,
@@ -171,9 +311,9 @@ class MidtransWebhookService
                         'invoice_code' => $invoiceRow->invoice_code,
                         'invoice_status' => 'PAID_LATE_REFUNDED',
                         'refund_amount' => $expectedGross,
-                        'mutation_reference' => $zombieMutation->reference_code,
+                        'mutation_reference' => $lateMutation->reference_code,
                         'webhook_log_id' => $log->id,
-                        'message' => 'Zombie Payment recovered: invoice marked PAID_LATE_REFUNDED and funds credited to buyer wallet.',
+                        'message' => 'Late payment safely refunded to buyer wallet (LATE_PAYMENT_REFUND) without stock re-lock.',
                     ];
                 }
 

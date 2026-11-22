@@ -46,7 +46,10 @@ class AppServiceProvider extends ServiceProvider
                 && ! app()->runningUnitTests()
                 && ! session('nexatrade_logged_out', false)
             ) {
-                $defaultBuyer = User::where('email', 'bagas@nexatrade.id')->first();
+                $defaultBuyer = User::where('email', 'bagas@nexatrade.id')
+                    ->where('is_active', true)
+                    ->where('is_banned', false)
+                    ->first();
                 if ($defaultBuyer) {
                     Auth::login($defaultBuyer);
                     $authUser = $defaultBuyer;

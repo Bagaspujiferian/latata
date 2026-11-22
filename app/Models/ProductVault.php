@@ -18,6 +18,33 @@ class ProductVault extends Model
         'sold_at',
     ];
 
+    /** @var list<string> */
+    protected $hidden = [
+        'encrypted_payload',
+        'payload_blind_hash',
+    ];
+
+    protected static function booted(): void
+    {
+        static::updating(function (self $vault): void {
+            $originalStatus = strtolower((string) $vault->getOriginal('status'));
+            if ($originalStatus === 'sold') {
+                throw new \DomainException('Baris brankas berstatus SOLD bersifat permanen dan tidak dapat diubah.');
+            }
+
+            if ($originalStatus === 'reserved' && $vault->isDirty(['encrypted_payload', 'payload_blind_hash'])) {
+                throw new \DomainException('Payload brankas yang sedang direservasi (RESERVED) tidak dapat diubah.');
+            }
+        });
+
+        static::deleting(function (self $vault): void {
+            $originalStatus = strtolower((string) $vault->getOriginal('status'));
+            if ($originalStatus !== 'available') {
+                throw new \DomainException('Baris brankas berstatus RESERVED atau SOLD tidak dapat dihapus.');
+            }
+        });
+    }
+
     /** @return array<string, string> */
     protected function casts(): array
     {

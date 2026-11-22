@@ -9,6 +9,7 @@ use App\Models\StoreOperatingHour;
 use App\Models\User;
 use App\Models\Wallet;
 use DomainException;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +20,7 @@ class SellerKycService
 {
     public function __construct(
         private readonly NotificationService $notificationService,
+        private readonly SecureImageUploadService $imageUploadService,
     ) {}
 
     public function computeNikBlindHash(string $nik): string
@@ -102,13 +104,9 @@ class SellerKycService
                 throw new DomainException("URL toko [{$slugCandidate}] sudah digunakan. Silakan pilih slug lain.");
             }
 
-            // Store KYC documents STRICTLY on private local disk (NEVER public!)
-            $idCardPath = Storage::disk('local')->putFile("private/kyc/{$userId}", $idCardFile);
-            $selfiePath = Storage::disk('local')->putFile("private/kyc/{$userId}", $selfieFile);
-
-            if (! is_string($idCardPath) || ! is_string($selfiePath)) {
-                throw new DomainException('Gagal menyimpan berkas verifikasi KYC secara aman.');
-            }
+            // Store GD-sanitized KYC documents STRICTLY on private local disk (NEVER public!)
+            $idCardPath = $this->imageUploadService->storeSanitizedImage($idCardFile, 'local', "private/kyc/{$userId}", 3072);
+            $selfiePath = $this->imageUploadService->storeSanitizedImage($selfieFile, 'local', "private/kyc/{$userId}", 3072);
 
             $kyc = SellerKycVerification::create([
                 'user_id' => $userId,
@@ -153,6 +151,10 @@ class SellerKycService
             $kyc = SellerKycVerification::where('id', $kycId)->lockForUpdate()->first();
             if (! $kyc) {
                 throw new DomainException("Data KYC #{$kycId} tidak ditemukan.");
+            }
+
+            if ((int) $kyc->user_id === $adminId) {
+                throw new AuthorizationException('Conflict of Interest: Admin dilarang menyetujui atau menolak pengajuan KYC miliknya sendiri.');
             }
 
             if ($kyc->status !== 'pending') {
@@ -249,6 +251,10 @@ class SellerKycService
             $kyc = SellerKycVerification::where('id', $kycId)->lockForUpdate()->first();
             if (! $kyc) {
                 throw new DomainException("Data KYC #{$kycId} tidak ditemukan.");
+            }
+
+            if ((int) $kyc->user_id === $adminId) {
+                throw new AuthorizationException('Conflict of Interest: Admin dilarang menyetujui atau menolak pengajuan KYC miliknya sendiri.');
             }
 
             if ($kyc->status !== 'pending') {

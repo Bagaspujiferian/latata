@@ -370,6 +370,31 @@ class EscrowLedgerService
         });
     }
 
+    /**
+     * Credit buyer available_balance idempotently when a late payment arrives for an EXPIRED invoice.
+     * Deliberately does NOT increase non_withdrawable_portion because these funds are a refund.
+     */
+    public function creditLatePaymentRefund(
+        int $buyerId,
+        int $invoiceId,
+        float $amount,
+        string $invoiceCode,
+    ): WalletMutation {
+        return DB::transaction(function () use ($buyerId, $invoiceId, $amount, $invoiceCode): WalletMutation {
+            return $this->mutateLockedWallet(
+                userId: $buyerId,
+                bucket: 'available',
+                direction: 'CREDIT',
+                amount: $amount,
+                mutationType: 'LATE_PAYMENT_REFUND',
+                referenceCode: "LATEPAY-{$invoiceCode}",
+                description: "Pengembalian otomatis pembayaran terlambat (EXPIRED invoice) untuk tagihan {$invoiceCode}",
+                orderId: null,
+                paymentInvoiceId: $invoiceId,
+            );
+        });
+    }
+
     public function holdForWithdrawal(int $userId, float $amount, string $withdrawCode): WalletMutation
     {
         return DB::transaction(function () use ($userId, $amount, $withdrawCode): WalletMutation {

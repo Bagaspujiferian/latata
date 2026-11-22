@@ -67,31 +67,37 @@
                     </div>
                 </div>
 
-                {{-- Midtrans Snap Simulator Panel --}}
+                {{-- Midtrans Snap Simulator Panel (Hidden in Production) --}}
                 @if(in_array($invoice->status, ['UNPAID', 'EXPIRED'], true))
-                    <div class="p-4 rounded-xl bg-[#F8FAFC] border border-[#E4E8EE] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div>
-                            <div class="text-xs font-bold text-[#111827]">
-                                {{ $invoice->status === 'EXPIRED' ? 'Uji Pemulihan Pembayaran Terlambat (Zombie Payment)' : 'Midtrans Snap Sandbox Trigger (SHA-512 Asli)' }}
+                    @if(config('nexatrade.demo_switcher_enabled'))
+                        <div class="p-4 rounded-xl bg-[#F8FAFC] border border-[#E4E8EE] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div>
+                                <div class="text-xs font-bold text-[#111827]">
+                                    {{ $invoice->status === 'EXPIRED' ? 'Uji Pemulihan Pembayaran Terlambat (Zombie Payment)' : 'Midtrans Snap Sandbox Trigger (SHA-512 Asli)' }}
+                                </div>
+                                <p class="text-xs text-[#4B5563] mt-1 leading-relaxed">
+                                    @if($invoice->status === 'EXPIRED')
+                                        Invoice telah kedaluwarsa. Mengirim webhook settlement sekarang akan mengamankan 100% dana ke Saldo Dompet Pembeli (`PAID_LATE_REFUNDED`).
+                                    @else
+                                        Menandatangani payload Midtrans menggunakan SHA-512 asli dan mengeksekusi settlement Split-Order serta pengiriman brankas AES-256 secara atomik.
+                                    @endif
+                                </p>
                             </div>
-                            <p class="text-xs text-[#4B5563] mt-1 leading-relaxed">
-                                @if($invoice->status === 'EXPIRED')
-                                    Invoice telah kedaluwarsa. Mengirim webhook settlement sekarang akan mengamankan 100% dana ke Saldo Dompet Pembeli (`PAID_LATE_REFUNDED`).
-                                @else
-                                    Menandatangani payload Midtrans menggunakan SHA-512 asli dan mengeksekusi settlement Split-Order serta pengiriman brankas AES-256 secara atomik.
-                                @endif
-                            </p>
-                        </div>
 
-                        <form method="POST" action="{{ route('invoices.simulate-pay', $invoice->invoice_code) }}" @submit="simulating = true" class="shrink-0">
-                            @csrf
-                            <button type="submit" :disabled="simulating"
-                                    class="btn-tactile px-4 py-2.5 rounded-lg bg-[#0068E1] hover:bg-[#0055B8] text-white text-xs font-bold inline-flex items-center gap-2 cursor-pointer disabled:opacity-65">
-                                <svg x-show="simulating" x-cloak class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity="0.25" stroke-width="3"/><path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
-                                <span x-text="simulating ? 'Memverifikasi SHA-512...' : '{{ $invoice->status === 'EXPIRED' ? 'Simulasi Bayar Telat (Zombie)' : 'Simulasi Bayar Lunas Midtrans' }}'"></span>
-                            </button>
-                        </form>
-                    </div>
+                            <form method="POST" action="{{ route('invoices.simulate-pay', $invoice->invoice_code) }}" @submit="simulating = true" class="shrink-0">
+                                @csrf
+                                <button type="submit" :disabled="simulating"
+                                        class="btn-tactile px-4 py-2.5 rounded-lg bg-[#0068E1] hover:bg-[#0055B8] text-white text-xs font-bold inline-flex items-center gap-2 cursor-pointer disabled:opacity-65">
+                                    <svg x-show="simulating" x-cloak class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity="0.25" stroke-width="3"/><path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+                                    <span x-text="simulating ? 'Memverifikasi SHA-512...' : '{{ $invoice->status === 'EXPIRED' ? 'Simulasi Bayar Telat (Zombie)' : 'Simulasi Bayar Lunas Midtrans' }}'"></span>
+                                </button>
+                            </form>
+                        </div>
+                    @else
+                        <div class="p-4 rounded-xl bg-[#EFF6FF] border border-[#BFDBFE] text-xs text-[#1E40AF]">
+                            Selesaikan pembayaran melalui kanal <strong class="uppercase">{{ $invoice->payment_channel }}</strong> sebelum batas waktu berakhir. Status tagihan diperbarui otomatis melalui webhook terverifikasi SHA-512.
+                        </div>
+                    @endif
                 @elseif($invoice->status === 'PAID_LATE_REFUNDED')
                     <div class="p-4 rounded-xl bg-[#ECFDF5] border border-[#A7F3D0] text-xs text-[#047857]">
                         <strong>Zombie Payment Recovery Aktif:</strong> Pembayaran terlambat telah diamankan 100% ke Saldo Aktif Dompet Anda (Ref: <span class="font-mono-tabular font-bold">ZOMBIE-{{ $invoice->invoice_code }}</span>).

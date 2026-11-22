@@ -343,6 +343,7 @@
                       class="bg-white border border-[#E4E8EE] rounded-xl p-5 sticky top-20 space-y-4">
                     @csrf
                     <input type="hidden" name="_idempotency_key" value="{{ (string) \Illuminate\Support\Str::uuid() }}">
+                    <input type="hidden" name="expected_grand_total" :value="(paymentMode === 'wallet_full' ? payableSubtotal : grandTotal).toFixed(2)">
                     <input type="hidden" name="platform_voucher_code" :value="appliedPlatformCode">
                     <template x-for="[sid, scode] in Object.entries(appliedSellerCodes)" :key="sid">
                         <input type="hidden" :name="'seller_voucher_codes[' + sid + ']'" :value="scode">

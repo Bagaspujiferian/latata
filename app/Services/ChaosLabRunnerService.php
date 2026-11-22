@@ -370,12 +370,15 @@ class ChaosLabRunnerService
 
         $invoice->refresh();
         $buyerBalanceAfter = (float) Wallet::where('user_id', $buyer->id)->value('available_balance');
-        $zombieMutation = WalletMutation::where('reference_code', "ZOMBIE-{$invoice->invoice_code}")->first();
+        $zombieMutation = WalletMutation::whereIn('reference_code', [
+            "LATEPAY-{$invoice->invoice_code}",
+            "ZOMBIE-{$invoice->invoice_code}",
+        ])->first();
 
         $passed = ($statusAfterSweep === 'EXPIRED')
             && ($stockAfterSweep === $stockBeforeCheckout)
             && ($invoice->status === 'PAID_LATE_REFUNDED')
-            && ($zombieMutation !== null && $zombieMutation->mutation_type === 'ZOMBIE_PAYMENT_REFUND')
+            && ($zombieMutation !== null && in_array($zombieMutation->mutation_type, ['LATE_PAYMENT_REFUND', 'ZOMBIE_PAYMENT_REFUND'], true))
             && (abs(($buyerBalanceAfter - $buyerBalanceBefore) - (float) $invoice->grand_total) < 0.01);
 
         return [

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\WarrantyClaim;
 use App\Services\AccountWarrantyService;
 use DomainException;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -58,7 +59,11 @@ class AdminWarrantyController extends Controller
         }
 
         $privatePath = (string) $paths[$index];
-        if (! Storage::disk('local')->exists($privatePath)) {
+        if (
+            ! str_starts_with($privatePath, 'private/warranty-claims/')
+            || str_contains($privatePath, '..')
+            || ! Storage::disk('local')->exists($privatePath)
+        ) {
             abort(404, 'File bukti tidak ditemukan pada penyimpanan privat.');
         }
 
@@ -88,6 +93,8 @@ class AdminWarrantyController extends Controller
                 : "Klaim {$resolved->claim_code} DITOLAK dan garansi dipulihkan sesuai masa berlaku.";
 
             return back()->with('success', $summary);
+        } catch (AuthorizationException $e) {
+            abort(403, $e->getMessage());
         } catch (DomainException $e) {
             return back()->with('error', $e->getMessage());
         }

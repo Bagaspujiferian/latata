@@ -18,6 +18,11 @@ class WalletPinResetToken extends Model
         'created_at',
     ];
 
+    /** @var list<string> */
+    protected $hidden = [
+        'token_hash',
+    ];
+
     /** @return array<string, string> */
     protected function casts(): array
     {

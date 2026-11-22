@@ -10,6 +10,7 @@ use App\Services\ChaosLabRunnerService;
 use App\Services\ChatModerationService;
 use App\Services\OrderStateAndSlaService;
 use DomainException;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -74,6 +75,8 @@ class AdminChaosLabController extends Controller
             };
 
             return back()->with('success', "Putusan Sengketa {$order->order_code} dieksekusi: {$label}.");
+        } catch (AuthorizationException $e) {
+            abort(403, $e->getMessage());
         } catch (DomainException $e) {
             return back()->with('error', $e->getMessage());
         }
@@ -112,6 +115,8 @@ class AdminChaosLabController extends Controller
             $wd = $this->orderStateService->approveWithdrawal($id, $request->user()->id);
 
             return back()->with('success', "Penarikan {$wd->withdraw_code} disetujui & ditandai PAID (Rp ".number_format((float) $wd->net_payout, 0, ',', '.').').');
+        } catch (AuthorizationException $e) {
+            abort(403, $e->getMessage());
         } catch (DomainException $e) {
             return back()->with('error', $e->getMessage());
         }
@@ -127,6 +132,8 @@ class AdminChaosLabController extends Controller
             $wd = $this->orderStateService->rejectWithdrawal($id, $request->user()->id, $validated['rejection_reason']);
 
             return back()->with('success', "Penarikan {$wd->withdraw_code} ditolak. Saldo Rp ".number_format((float) $wd->amount, 0, ',', '.').' otomatis dikembalikan via WITHDRAW_REJECT_REFUND.');
+        } catch (AuthorizationException $e) {
+            abort(403, $e->getMessage());
         } catch (DomainException $e) {
             return back()->with('error', $e->getMessage());
         }

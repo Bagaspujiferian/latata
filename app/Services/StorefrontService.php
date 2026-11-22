@@ -15,6 +15,7 @@ class StorefrontService
 {
     public function __construct(
         private readonly ProductCatalogFilterService $catalogFilterService,
+        private readonly SecureImageUploadService $imageUploadService,
     ) {}
 
     /**
@@ -121,10 +122,12 @@ class StorefrontService
             }
 
             if ($bannerFile !== null) {
-                $storedBanner = Storage::disk('public')->putFile("banners/{$sellerId}", $bannerFile);
-                if (is_string($storedBanner)) {
-                    $profile->store_banner_path = $storedBanner;
-                }
+                $profile->store_banner_path = $this->imageUploadService->storeSanitizedImage(
+                    $bannerFile,
+                    'public',
+                    "banners/{$sellerId}",
+                    3072,
+                );
             } elseif (! empty($profileData['store_banner_path'])) {
                 $profile->store_banner_path = trim((string) $profileData['store_banner_path']);
             }
