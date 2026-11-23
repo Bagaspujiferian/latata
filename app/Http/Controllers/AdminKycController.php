@@ -94,10 +94,11 @@ class AdminKycController extends Controller
     public function approve(Request $request, SellerKycVerification $kyc): RedirectResponse
     {
         try {
-            $approved = $this->kycService->approveApplication($kyc->id, $request->user()->id);
+            $approved = $this->kycService->approveApplication($kyc->id, $this->requireUser($request)->id);
+            $applicantName = $approved->user->name ?? 'Pemohon';
 
             return redirect()->route('admin.kyc.index', ['tab' => 'approved'])
-                ->with('success', "KYC #{$approved->id} disetujui! Akun {$approved->user->name} resmi di-upgrade ke Seller ({$approved->proposed_store_name}) lengkap dengan 7 hari jadwal operasional.");
+                ->with('success', "KYC #{$approved->id} disetujui! Akun {$applicantName} resmi di-upgrade ke Seller ({$approved->proposed_store_name}) lengkap dengan 7 hari jadwal operasional.");
         } catch (AuthorizationException $e) {
             abort(403, $e->getMessage());
         } catch (DomainException $e) {
@@ -112,7 +113,7 @@ class AdminKycController extends Controller
         ]);
 
         try {
-            $rejected = $this->kycService->rejectApplication($kyc->id, $request->user()->id, $validated['rejection_reason']);
+            $rejected = $this->kycService->rejectApplication($kyc->id, $this->requireUser($request)->id, $validated['rejection_reason']);
 
             return redirect()->route('admin.kyc.index', ['tab' => 'rejected'])
                 ->with('success', "KYC #{$rejected->id} ditolak. Kunci NIK & pengajuan dilepas agar pemohon dapat mengajukan ulang dengan dokumen yang benar.");

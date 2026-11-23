@@ -5,6 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property array<int, string>|null $evidence_paths
+ */
 class WarrantyClaim extends Model
 {
     /** @var array<string, string> */
@@ -46,31 +49,37 @@ class WarrantyClaim extends Model
         ];
     }
 
+    /** @return BelongsTo<OrderWarranty, $this> */
     public function warranty(): BelongsTo
     {
         return $this->belongsTo(OrderWarranty::class, 'order_warranty_id', 'id');
     }
 
+    /** @return BelongsTo<Order, $this> */
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
     }
 
+    /** @return BelongsTo<User, $this> */
     public function buyer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'buyer_id', 'id');
     }
 
+    /** @return BelongsTo<User, $this> */
     public function seller(): BelongsTo
     {
         return $this->belongsTo(User::class, 'seller_id', 'id');
     }
 
+    /** @return BelongsTo<SellerProfile, $this> */
     public function sellerProfile(): BelongsTo
     {
         return $this->belongsTo(SellerProfile::class, 'seller_id', 'user_id');
     }
 
+    /** @return BelongsTo<User, $this> */
     public function resolver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'resolved_by', 'id');
@@ -78,6 +87,6 @@ class WarrantyClaim extends Model
 
     public function reasonLabel(): string
     {
-        return self::REASON_LABELS[$this->reason_category] ?? $this->reason_category;
+        return self::REASON_LABELS[$this->reason_category];
     }
 }

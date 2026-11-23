@@ -28,7 +28,7 @@ class SellerSlaMetricsService
         if ($recentOrders->isNotEmpty()) {
             $durations = [];
             foreach ($recentOrders as $order) {
-                $start = $order->paymentInvoice?->paid_at ?? $order->created_at;
+                $start = $order->paymentInvoice->paid_at ?? $order->created_at ?? now();
                 $seconds = max(3, $start->diffInSeconds($order->delivered_at, false));
                 $durations[] = round($seconds / 60, 2);
             }

@@ -54,36 +54,43 @@ class Product extends Model
         ];
     }
 
+    /** @return HasMany<ProductBoost, $this> */
     public function boosts(): HasMany
     {
         return $this->hasMany(ProductBoost::class)->orderByDesc('id');
     }
 
+    /** @return BelongsTo<User, $this> */
     public function seller(): BelongsTo
     {
         return $this->belongsTo(User::class, 'seller_id', 'id');
     }
 
+    /** @return BelongsTo<SellerProfile, $this> */
     public function sellerProfile(): BelongsTo
     {
         return $this->belongsTo(SellerProfile::class, 'seller_id', 'user_id');
     }
 
+    /** @return BelongsTo<GameCategory, $this> */
     public function gameCategory(): BelongsTo
     {
         return $this->belongsTo(GameCategory::class);
     }
 
+    /** @return HasMany<ProductVault, $this> */
     public function vaults(): HasMany
     {
         return $this->hasMany(ProductVault::class);
     }
 
+    /** @return HasMany<OrderReview, $this> */
     public function reviews(): HasMany
     {
         return $this->hasMany(OrderReview::class);
     }
 
+    /** @return HasMany<ProductImage, $this> */
     public function images(): HasMany
     {
         return $this->hasMany(ProductImage::class)
@@ -92,6 +99,7 @@ class Product extends Model
             ->orderBy('id');
     }
 
+    /** @return HasOne<ProductImage, $this> */
     public function primaryImage(): HasOne
     {
         return $this->hasOne(ProductImage::class)
@@ -100,17 +108,20 @@ class Product extends Model
             ->orderBy('id');
     }
 
+    /** @return HasMany<ProductAttributeValue, $this> */
     public function attributeValues(): HasMany
     {
         return $this->hasMany(ProductAttributeValue::class);
     }
 
+    /** @return BelongsToMany<User, $this> */
     public function wishlistedBy(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'wishlists', 'product_id', 'user_id')
             ->withPivot('created_at');
     }
 
+    /** @return BelongsToMany<User, $this> */
     public function wishlists(): BelongsToMany
     {
         return $this->wishlistedBy();
@@ -126,7 +137,7 @@ class Product extends Model
             return $this->primaryImage->publicUrl();
         }
 
-        return (string) ($this->gameCategory?->game?->thumbnail_url ?? '/images/games/steam-wallet.svg');
+        return (string) ($this->gameCategory?->game->thumbnail_url ?? '/images/games/steam-wallet.svg');
     }
 
     public function deliveryMethodLabel(): string

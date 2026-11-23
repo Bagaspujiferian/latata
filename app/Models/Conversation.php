@@ -30,31 +30,37 @@ class Conversation extends Model
         ];
     }
 
+    /** @return BelongsTo<User, $this> */
     public function buyer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'buyer_id', 'id');
     }
 
+    /** @return BelongsTo<User, $this> */
     public function seller(): BelongsTo
     {
         return $this->belongsTo(User::class, 'seller_id', 'id');
     }
 
+    /** @return BelongsTo<SellerProfile, $this> */
     public function sellerProfile(): BelongsTo
     {
         return $this->belongsTo(SellerProfile::class, 'seller_id', 'user_id');
     }
 
+    /** @return BelongsTo<Product, $this> */
     public function contextProduct(): BelongsTo
     {
         return $this->belongsTo(Product::class, 'context_product_id', 'id')->withTrashed();
     }
 
+    /** @return BelongsTo<Order, $this> */
     public function contextOrder(): BelongsTo
     {
         return $this->belongsTo(Order::class, 'context_order_id', 'id');
     }
 
+    /** @return HasMany<ConversationMessage, $this> */
     public function messages(): HasMany
     {
         return $this->hasMany(ConversationMessage::class)->orderBy('id', 'asc');

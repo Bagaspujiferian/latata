@@ -31,6 +31,7 @@ class AdCreditPackage extends Model
         ];
     }
 
+    /** @return HasMany<AdCreditPurchase, $this> */
     public function purchases(): HasMany
     {
         return $this->hasMany(AdCreditPurchase::class, 'package_id', 'id');

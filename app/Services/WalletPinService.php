@@ -159,11 +159,11 @@ class WalletPinService
             return ['status' => 'ok'];
         });
 
-        if (($outcome['status'] ?? '') === 'ok') {
+        if ($outcome['status'] === 'ok') {
             return;
         }
 
-        if (($outcome['type'] ?? '') === 'locked') {
+        if ($outcome['type'] === 'locked') {
             throw new WalletPinLockedException($outcome['message']);
         }
 

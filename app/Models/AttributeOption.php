@@ -23,6 +23,7 @@ class AttributeOption extends Model
         ];
     }
 
+    /** @return BelongsTo<CategoryAttribute, $this> */
     public function categoryAttribute(): BelongsTo
     {
         return $this->belongsTo(CategoryAttribute::class);

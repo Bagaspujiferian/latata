@@ -15,6 +15,7 @@ class ProductCatalogFilterService
      * Build an indexed, N+1-free catalog query using whereExists subqueries on product_attribute_values.
      *
      * @param  array<string, mixed>  $filters
+     * @return Builder<Product>
      */
     public function buildQuery(array $filters): Builder
     {
@@ -181,6 +182,7 @@ class ProductCatalogFilterService
 
     /**
      * @param  array<string, mixed>  $filters
+     * @return LengthAwarePaginator<int, Product>
      */
     public function paginateProducts(array $filters, int $perPage = 16): LengthAwarePaginator
     {

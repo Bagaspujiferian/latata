@@ -9,7 +9,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property Carbon|null $wallet_pin_locked_until
+ * @property Carbon|null $wallet_pin_set_at
+ * @property Carbon|null $banned_at
+ */
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
@@ -63,76 +69,91 @@ class User extends Authenticatable
         return $this->wallet_pin_locked_until !== null && $this->wallet_pin_locked_until->isFuture();
     }
 
+    /** @return HasOne<SellerProfile, $this> */
     public function sellerProfile(): HasOne
     {
         return $this->hasOne(SellerProfile::class, 'user_id', 'id');
     }
 
+    /** @return HasOne<Wallet, $this> */
     public function wallet(): HasOne
     {
         return $this->hasOne(Wallet::class, 'user_id', 'id');
     }
 
+    /** @return HasMany<WalletMutation, $this> */
     public function walletMutations(): HasMany
     {
         return $this->hasMany(WalletMutation::class, 'user_id', 'id');
     }
 
+    /** @return HasMany<Product, $this> */
     public function products(): HasMany
     {
         return $this->hasMany(Product::class, 'seller_id', 'id');
     }
 
+    /** @return HasMany<CartItem, $this> */
     public function cartItems(): HasMany
     {
         return $this->hasMany(CartItem::class, 'user_id', 'id');
     }
 
+    /** @return HasMany<PaymentInvoice, $this> */
     public function buyerInvoices(): HasMany
     {
         return $this->hasMany(PaymentInvoice::class, 'buyer_id', 'id');
     }
 
+    /** @return HasMany<Order, $this> */
     public function buyerOrders(): HasMany
     {
         return $this->hasMany(Order::class, 'buyer_id', 'id');
     }
 
+    /** @return HasMany<Order, $this> */
     public function sellerOrders(): HasMany
     {
         return $this->hasMany(Order::class, 'seller_id', 'id');
     }
 
+    /** @return HasMany<WithdrawalRequest, $this> */
     public function withdrawalRequests(): HasMany
     {
         return $this->hasMany(WithdrawalRequest::class, 'user_id', 'id');
     }
 
+    /** @return HasMany<UserBankAccount, $this> */
     public function bankAccounts(): HasMany
     {
         return $this->hasMany(UserBankAccount::class, 'user_id', 'id');
     }
 
+    /** @return HasMany<SellerKycVerification, $this> */
     public function kycVerifications(): HasMany
     {
         return $this->hasMany(SellerKycVerification::class, 'user_id', 'id');
     }
 
+    /** @return HasMany<UserNotification, $this> */
     public function userNotifications(): HasMany
     {
         return $this->hasMany(UserNotification::class, 'user_id', 'id');
     }
 
+    /** @return HasMany<Conversation, $this> */
     public function buyerConversations(): HasMany
     {
         return $this->hasMany(Conversation::class, 'buyer_id', 'id');
     }
 
+    /** @return HasMany<Conversation, $this> */
     public function sellerConversations(): HasMany
     {
         return $this->hasMany(Conversation::class, 'seller_id', 'id');
     }
 
+    /** @return BelongsToMany<Product, $this> */
     public function wishlistedProducts(): BelongsToMany
     {
         return $this->belongsToMany(Product::class, 'wishlists', 'user_id', 'product_id')
@@ -140,6 +161,7 @@ class User extends Authenticatable
             ->orderByPivot('created_at', 'desc');
     }
 
+    /** @return BelongsToMany<SellerProfile, $this> */
     public function followedStores(): BelongsToMany
     {
         return $this->belongsToMany(SellerProfile::class, 'store_followers', 'user_id', 'seller_id')

@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Exceptions\AntiGestunWithdrawalException;
-use App\Exceptions\InsufficientWalletBalanceException;
 use App\Models\Order;
 use App\Models\OrderReview;
 use App\Models\PaymentInvoice;
@@ -166,7 +165,7 @@ class OrderStateAndSlaService
                 senderRoleOverride: 'system',
             );
 
-            return $order->fresh(['items', 'paymentInvoice']);
+            return $order->refresh()->load(['items', 'paymentInvoice']);
         });
     }
 
@@ -192,12 +191,12 @@ class OrderStateAndSlaService
 
             StateTransitionGuard::assertOrderTransition($orderRow->status, 'COMPLETED', "Buyer Confirm {$orderRow->order_code}");
 
-            $order = $this->finalizeCompletedOrderWithinLock($orderRow, 'Pembeli mengonfirmasi pesanan selesai.');
+            $order = $this->finalizeCompletedOrderWithinLock((int) $orderRow->id, (int) $orderRow->seller_id, 'Pembeli mengonfirmasi pesanan selesai.');
 
             if ($rating !== null && $rating >= 1 && $rating <= 5) {
                 $firstItem = $order->items->first();
                 if ($firstItem && ! OrderReview::where('order_id', $order->id)->exists()) {
-                    $start = $order->paymentInvoice?->paid_at ?? $order->created_at;
+                    $start = $order->paymentInvoice->paid_at ?? $order->created_at ?? now();
                     $end = $order->delivered_at ?? now();
                     $durationMinutes = max(1, (int) round($start->diffInMinutes($end)));
 
@@ -221,7 +220,7 @@ class OrderStateAndSlaService
                 }
             }
 
-            return $order->fresh(['items', 'review', 'paymentInvoice']);
+            return $order->refresh()->load(['items', 'review', 'paymentInvoice']);
         });
     }
 
@@ -283,7 +282,7 @@ class OrderStateAndSlaService
                 refId: (int) $order->id,
             );
 
-            return $order->fresh(['items', 'messages']);
+            return $order->refresh()->load(['items', 'messages']);
         });
     }
 
@@ -321,7 +320,7 @@ class OrderStateAndSlaService
 
             if ($verdict === 'RELEASE_TO_SELLER') {
                 StateTransitionGuard::assertOrderTransition($orderRow->status, 'COMPLETED', "Admin Verdict {$orderRow->order_code}");
-                $order = $this->finalizeCompletedOrderWithinLock($orderRow, "Putusan Admin Arbitrase: Menangkan Penjual. {$adminNotes}");
+                $order = $this->finalizeCompletedOrderWithinLock((int) $orderRow->id, (int) $orderRow->seller_id, "Putusan Admin Arbitrase: Menangkan Penjual. {$adminNotes}");
 
                 $this->chatModerationService->postOrderMessage(
                     order: $order,
@@ -330,7 +329,7 @@ class OrderStateAndSlaService
                     senderRoleOverride: 'admin',
                 );
 
-                return $order->fresh(['items', 'messages']);
+                return $order->refresh()->load(['items', 'messages']);
             }
 
             if ($verdict === 'SPLIT_SETTLEMENT') {
@@ -417,7 +416,7 @@ class OrderStateAndSlaService
                     );
                 });
 
-                return $order->fresh(['items', 'messages', 'paymentInvoice']);
+                return $order->refresh()->load(['items', 'messages', 'paymentInvoice']);
             }
 
             StateTransitionGuard::assertOrderTransition($orderRow->status, 'REFUNDED', "Admin Verdict {$orderRow->order_code}");
@@ -452,7 +451,7 @@ class OrderStateAndSlaService
                 senderRoleOverride: 'admin',
             );
 
-            return $order->fresh(['items', 'messages']);
+            return $order->refresh()->load(['items', 'messages']);
         });
     }
 
@@ -483,7 +482,7 @@ class OrderStateAndSlaService
                     return null;
                 }
 
-                $invoiceModel = PaymentInvoice::findOrFail($invoiceId);
+                $invoiceModel = PaymentInvoice::findOrFail((int) $invoiceId);
 
                 return $this->expireInvoiceWithinTransaction($invoiceModel, 'Tagihan melewati batas waktu pembayaran (Sweeper Worker).');
             });
@@ -643,7 +642,7 @@ class OrderStateAndSlaService
                 }
 
                 StateTransitionGuard::assertOrderTransition($orderRow->status, 'COMPLETED', "Auto-Settle {$orderRow->order_code}");
-                $completed = $this->finalizeCompletedOrderWithinLock($orderRow, 'Pencairan otomatis setelah melewati masa garansi 24 jam.');
+                $completed = $this->finalizeCompletedOrderWithinLock((int) $orderRow->id, (int) $orderRow->seller_id, 'Pencairan otomatis setelah melewati masa garansi 24 jam.');
 
                 return [
                     'order_code' => $completed->order_code,
@@ -843,20 +842,20 @@ class OrderStateAndSlaService
         });
     }
 
-    private function finalizeCompletedOrderWithinLock(object $orderRow, string $note): Order
+    private function finalizeCompletedOrderWithinLock(int $orderId, int $sellerId, string $note): Order
     {
         $now = now();
 
-        DB::table('orders')->where('id', $orderRow->id)->update([
+        DB::table('orders')->where('id', $orderId)->update([
             'status' => 'COMPLETED',
             'completed_at' => $now,
             'updated_at' => $now,
         ]);
 
-        DB::table('seller_profiles')->where('user_id', $orderRow->seller_id)->lockForUpdate()->first();
-        DB::table('seller_profiles')->where('user_id', $orderRow->seller_id)->increment('total_completed_orders');
+        DB::table('seller_profiles')->where('user_id', $sellerId)->lockForUpdate()->first();
+        DB::table('seller_profiles')->where('user_id', $sellerId)->increment('total_completed_orders');
 
-        $order = Order::with(['items', 'paymentInvoice'])->findOrFail($orderRow->id);
+        $order = Order::with(['items', 'paymentInvoice'])->findOrFail($orderId);
 
         // For non-vault orders, increment sold_count upon final COMPLETED confirmation.
         if ($order->delivery_method !== 'instant_vault') {

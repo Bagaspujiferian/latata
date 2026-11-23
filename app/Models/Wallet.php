@@ -45,11 +45,13 @@ class Wallet extends Model
         return round(max(0.0, (float) $this->available_balance - (float) $this->non_withdrawable_portion), 2);
     }
 
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id', 'id');
     }
 
+    /** @return HasMany<WalletMutation, $this> */
     public function mutations(): HasMany
     {
         return $this->hasMany(WalletMutation::class, 'user_id', 'user_id');

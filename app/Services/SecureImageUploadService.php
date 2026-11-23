@@ -18,6 +18,27 @@ class SecureImageUploadService
     ];
 
     /**
+     * Reusable Laravel validation rule Closure that inspects real binary MIME & GD decodeability
+     * (prevents extension spoofing even in PHPUnit Testing\File where getMimeType() guesses by filename).
+     */
+    public function validationRule(int $maxKilobytes = 3072): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail) use ($maxKilobytes): void {
+            if (! ($value instanceof UploadedFile)) {
+                $fail('Berkas yang diunggah tidak valid.');
+
+                return;
+            }
+
+            try {
+                $this->validateAndDecodeImage($value, $maxKilobytes);
+            } catch (DomainException $e) {
+                $fail($e->getMessage());
+            }
+        };
+    }
+
+    /**
      * Validate MIME/size and re-encode raster image via GD into a clean UUID filename,
      * stripping EXIF/GPS metadata and appended PHP polyglot payloads before storage.
      */
@@ -27,6 +48,26 @@ class SecureImageUploadService
         string $directory,
         int $maxKilobytes = 3072,
     ): string {
+        [$sanitizedBytes, $resolvedMime, $detectedMime] = $this->validateAndDecodeImage($file, $maxKilobytes);
+        $targetExtension = self::ALLOWED_MIMES[$resolvedMime] ?? self::ALLOWED_MIMES[$detectedMime];
+
+        $cleanDirectory = trim(str_replace('\\', '/', $directory), '/');
+        $uuidFilename = (string) Str::uuid().'.'.$targetExtension;
+        $relativePath = $cleanDirectory !== '' ? "{$cleanDirectory}/{$uuidFilename}" : $uuidFilename;
+
+        $written = Storage::disk($disk)->put($relativePath, $sanitizedBytes);
+        if (! $written) {
+            throw new DomainException('Gagal menyimpan gambar tersanitasi ke penyimpanan.');
+        }
+
+        return $relativePath;
+    }
+
+    /**
+     * @return array{0: string, 1: string, 2: string}
+     */
+    private function validateAndDecodeImage(UploadedFile $file, int $maxKilobytes): array
+    {
         if (! $file->isValid()) {
             throw new DomainException('Berkas gambar gagal diunggah atau tidak valid.');
         }
@@ -49,18 +90,8 @@ class SecureImageUploadService
         }
 
         [$sanitizedBytes, $resolvedMime] = $this->reencodeAndStripMetadata($rawBytes, $detectedMime, $isUnitTestStub);
-        $targetExtension = self::ALLOWED_MIMES[$resolvedMime] ?? self::ALLOWED_MIMES[$detectedMime];
 
-        $cleanDirectory = trim(str_replace('\\', '/', $directory), '/');
-        $uuidFilename = (string) Str::uuid().'.'.$targetExtension;
-        $relativePath = $cleanDirectory !== '' ? "{$cleanDirectory}/{$uuidFilename}" : $uuidFilename;
-
-        $written = Storage::disk($disk)->put($relativePath, $sanitizedBytes);
-        if (! $written) {
-            throw new DomainException('Gagal menyimpan gambar tersanitasi ke penyimpanan.');
-        }
-
-        return $relativePath;
+        return [$sanitizedBytes, $resolvedMime, $detectedMime];
     }
 
     private function readUploadedBytes(UploadedFile $file): string
@@ -112,7 +143,9 @@ class SecureImageUploadService
                 throw new DomainException('Gagal membuat kanvas sanitasi gambar.');
             }
             $bg = imagecolorallocate($gdImage, 244, 246, 249);
-            imagefilledrectangle($gdImage, 0, 0, 15, 15, $bg);
+            if ($bg !== false) {
+                imagefilledrectangle($gdImage, 0, 0, 15, 15, $bg);
+            }
             $effectiveMime = $declaredMime;
         } else {
             $finfo = new \finfo(FILEINFO_MIME_TYPE);

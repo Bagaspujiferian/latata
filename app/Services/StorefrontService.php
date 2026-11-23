@@ -9,7 +9,6 @@ use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 
 class StorefrontService
 {
@@ -153,7 +152,7 @@ class StorefrontService
                 );
             }
 
-            return $profile->fresh('operatingHours');
+            return $profile->refresh()->load('operatingHours');
         });
     }
 
@@ -178,7 +177,7 @@ class StorefrontService
             $review->replied_at = now();
             $review->save();
 
-            return $review->fresh(['buyer', 'product', 'order']);
+            return $review->refresh()->load(['buyer', 'product', 'order']);
         });
     }
 

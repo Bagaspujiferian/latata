@@ -128,6 +128,9 @@ class CheckoutSplitOrderService
                 }
 
                 $category = $product->gameCategory;
+                if (! $category) {
+                    throw new DomainException("Kategori produk {$product->title} tidak ditemukan.");
+                }
                 $deliveryMethod = $category->delivery_method;
 
                 // SUSPENDED STORE GUARD: suspended stores cannot accept ANY transactions (including instant_vault/api_h2h)
@@ -414,7 +417,7 @@ class CheckoutSplitOrderService
                     $unitPrice = (float) $item['unit_price'];
                     $qty = (int) $item['quantity'];
                     $flashItemId = $item['flash_sale_item_id'] ?? null;
-                    $originalPrice = isset($item['original_unit_price']) && $item['original_unit_price'] !== null
+                    $originalPrice = isset($item['original_unit_price'])
                         ? number_format((float) $item['original_unit_price'], 2, '.', '')
                         : null;
 
@@ -526,7 +529,7 @@ class CheckoutSplitOrderService
                         orderCode: $childOrder->order_code,
                     );
 
-                    $this->fulfillmentDispatcher->dispatch($childOrder->fresh());
+                    $this->fulfillmentDispatcher->dispatch($childOrder->refresh());
                 }
             } elseif ($paymentMode === 'hybrid_wallet_gateway' && $walletUsedAmount > 0) {
                 $this->ledgerService->deductBuyerWalletForCheckout(
@@ -538,7 +541,7 @@ class CheckoutSplitOrderService
                 );
             }
 
-            return $invoice->fresh(['orders.items', 'orders.sellerProfile']);
+            return $invoice->refresh()->load(['orders.items', 'orders.sellerProfile']);
         });
     }
 
@@ -552,7 +555,7 @@ class CheckoutSplitOrderService
             return $explicitItems;
         }
 
-        return CartItem::where('user_id', $buyerId)
+        return array_values(CartItem::where('user_id', $buyerId)
             ->orderBy('id', 'asc')
             ->get()
             ->map(static fn (CartItem $cart): array => [
@@ -561,7 +564,7 @@ class CheckoutSplitOrderService
                 'buyer_game_inputs' => $cart->buyer_game_inputs ?? [],
                 'verified_game_nickname' => $cart->verified_game_nickname,
             ])
-            ->all();
+            ->all());
     }
 
     /**

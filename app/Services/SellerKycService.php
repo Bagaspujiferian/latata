@@ -13,7 +13,6 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class SellerKycService
@@ -42,7 +41,7 @@ class SellerKycService
         UploadedFile $idCardFile,
         UploadedFile $selfieFile,
     ): SellerKycVerification {
-        $rawNik = preg_replace('/\D+/', '', trim((string) ($data['nik'] ?? ''))) ?? '';
+        $rawNik = preg_replace('/\D+/', '', trim($data['nik'])) ?? '';
         if (! preg_match('/^\d{16}$/', $rawNik)) {
             throw new DomainException('NIK wajib terdiri dari tepat 16 digit angka sesuai e-KTP.');
         }
@@ -169,7 +168,7 @@ class SellerKycService
 
             $kyc->status = 'approved';
             $kyc->rejection_reason = null;
-            $kyc->reviewed_by = $adminId;
+            $kyc->reviewed_by = $admin->id;
             $kyc->reviewed_at = now();
             $kyc->save();
 
@@ -231,7 +230,7 @@ class SellerKycService
                 refId: (int) $kyc->id,
             );
 
-            return $kyc->fresh(['user.sellerProfile', 'reviewer']);
+            return $kyc->refresh()->load(['user.sellerProfile', 'reviewer']);
         });
     }
 
@@ -266,7 +265,7 @@ class SellerKycService
             $kyc->rejection_reason = mb_substr($trimmedReason, 0, 255);
             $kyc->active_nik_lock_hash = null;
             $kyc->active_user_lock = null;
-            $kyc->reviewed_by = $adminId;
+            $kyc->reviewed_by = $admin->id;
             $kyc->reviewed_at = now();
             $kyc->save();
 
@@ -280,7 +279,7 @@ class SellerKycService
                 refId: (int) $kyc->id,
             );
 
-            return $kyc->fresh(['user', 'reviewer']);
+            return $kyc->refresh()->load(['user', 'reviewer']);
         });
     }
 }

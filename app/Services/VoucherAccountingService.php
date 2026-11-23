@@ -30,7 +30,7 @@ class VoucherAccountingService
 
         $this->assertVoucherEligibilityBase($voucher, $buyerId);
 
-        $orders = $cartBreakdown instanceof Collection ? $cartBreakdown->values()->all() : array_values($cartBreakdown);
+        $orders = array_values($cartBreakdown instanceof Collection ? $cartBreakdown->all() : $cartBreakdown);
         $eligibleIndices = $this->findEligibleOrderIndices($voucher, $orders);
 
         if (empty($eligibleIndices)) {
@@ -358,7 +358,7 @@ class VoucherAccountingService
             if ($voucher->game_id !== null) {
                 $hasMatchingGame = false;
                 foreach ($order['items'] ?? [] as $item) {
-                    $itemGameId = (int) ($item['game_id'] ?? $item['product']?->gameCategory?->game_id ?? 0);
+                    $itemGameId = (int) ($item['game_id'] ?? $item['product']?->gameCategory->game_id ?? 0);
                     if ($itemGameId === (int) $voucher->game_id) {
                         $hasMatchingGame = true;
                         break;

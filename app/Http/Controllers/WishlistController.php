@@ -20,7 +20,7 @@ class WishlistController extends Controller
 
     public function index(Request $request): View
     {
-        $user = $request->user();
+        $user = $this->requireUser($request);
         $tab = $request->string('tab', 'wishlist')->toString();
         if (! in_array($tab, ['wishlist', 'following'], true)) {
             $tab = 'wishlist';
@@ -43,7 +43,7 @@ class WishlistController extends Controller
     public function toggleWishlist(Request $request, Product $product): JsonResponse|RedirectResponse
     {
         try {
-            $result = $this->wishlistService->toggleWishlist($request->user()->id, $product->id);
+            $result = $this->wishlistService->toggleWishlist($this->requireUser($request)->id, $product->id);
 
             if ($request->expectsJson()) {
                 return response()->json(['ok' => true] + $result);
@@ -70,7 +70,7 @@ class WishlistController extends Controller
             : SellerProfile::where('slug', $seller)->firstOrFail();
 
         try {
-            $result = $this->wishlistService->toggleFollowStore($request->user()->id, (int) $store->user_id);
+            $result = $this->wishlistService->toggleFollowStore($this->requireUser($request)->id, (int) $store->user_id);
 
             if ($request->expectsJson()) {
                 return response()->json(['ok' => true] + $result);

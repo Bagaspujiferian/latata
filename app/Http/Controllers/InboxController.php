@@ -22,7 +22,7 @@ class InboxController extends Controller
 
     public function index(Request $request): View
     {
-        $user = $request->user();
+        $user = $this->requireUser($request);
         $search = trim($request->string('q')->toString());
         $requestedId = $request->integer('conversation');
         $preAttachProductId = $request->integer('attach_product');
@@ -116,7 +116,7 @@ class InboxController extends Controller
 
         try {
             $conversation = $this->conversationService->startOrGetConversation(
-                buyerId: $request->user()->id,
+                buyerId: $this->requireUser($request)->id,
                 sellerId: (int) $validated['seller_id'],
                 productId: isset($validated['product_id']) ? (int) $validated['product_id'] : null,
                 orderId: isset($validated['order_id']) ? (int) $validated['order_id'] : null,
@@ -147,7 +147,7 @@ class InboxController extends Controller
 
     public function messages(Request $request, Conversation $conversation): JsonResponse
     {
-        $user = $request->user();
+        $user = $this->requireUser($request);
         if ((int) $conversation->buyer_id !== (int) $user->id && (int) $conversation->seller_id !== (int) $user->id) {
             abort(403, 'Anda tidak memiliki akses ke percakapan ini.');
         }
@@ -179,7 +179,7 @@ class InboxController extends Controller
         try {
             $msg = $this->conversationService->sendMessage(
                 conversationId: $conversation->id,
-                senderId: $request->user()->id,
+                senderId: $this->requireUser($request)->id,
                 rawMessage: $validated['message'],
                 attachedProductId: isset($validated['attached_product_id']) ? (int) $validated['attached_product_id'] : null,
                 attachedOrderId: isset($validated['attached_order_id']) ? (int) $validated['attached_order_id'] : null,
@@ -188,7 +188,7 @@ class InboxController extends Controller
             if ($request->expectsJson()) {
                 return response()->json([
                     'ok' => true,
-                    'message' => $this->serializeMessage($msg, $request->user()->id),
+                    'message' => $this->serializeMessage($msg, $this->requireUser($request)->id),
                     'warning' => $msg->is_flagged_bypass
                         ? "Peringatan Anti-Bypass: Pola [{$msg->detected_violation_type}] otomatis disensor demi keamanan transaksi."
                         : null,
@@ -233,7 +233,7 @@ class InboxController extends Controller
         return [
             'id' => $msg->id,
             'sender_id' => (int) $msg->sender_id,
-            'sender_name' => $msg->sender?->name ?? 'Pengguna',
+            'sender_name' => $msg->sender->name ?? 'Pengguna',
             'sender_role' => $msg->sender_role,
             'is_mine' => (int) $msg->sender_id === $viewerId,
             'sanitized_message' => $msg->sanitized_message,
@@ -241,8 +241,8 @@ class InboxController extends Controller
             'detected_violation_type' => $msg->detected_violation_type,
             'attached_product' => $attachedProduct,
             'read' => $msg->read_at !== null,
-            'time_label' => $msg->created_at?->format('H:i') ?? '',
-            'date_label' => $msg->created_at?->format('d M Y') ?? '',
+            'time_label' => $msg->created_at->format('H:i'),
+            'date_label' => $msg->created_at->format('d M Y'),
         ];
     }
 }

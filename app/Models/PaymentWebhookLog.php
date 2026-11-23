@@ -4,6 +4,9 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @property array<string, mixed>|null $raw_payload
+ */
 class PaymentWebhookLog extends Model
 {
     public const UPDATED_AT = null;

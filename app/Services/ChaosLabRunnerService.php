@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\Order;
-use App\Models\PaymentInvoice;
 use App\Models\PaymentWebhookLog;
 use App\Models\Product;
 use App\Models\ProductVault;
@@ -144,7 +143,7 @@ class ChaosLabRunnerService
                 'invoice_transition_unpaid_to_paid' => $invoice->status === 'PAID',
                 'split_orders_created' => $orders->count(),
                 'instant_vault_auto_delivered_and_decrypted' => $vaultOrder?->status === 'DELIVERED' && $decryptedSecret !== null,
-                'manual_trade_sla_clock_started' => $manualOrder?->status === 'PROCESSING' && $manualOrder?->sla_deadline_at !== null,
+                'manual_trade_sla_clock_started' => $manualOrder?->status === 'PROCESSING' && $manualOrder->sla_deadline_at !== null,
                 'seller_1_escrow_delta_exact' => round($seller1PendingAfter - $seller1PendingBefore, 2),
                 'seller_2_escrow_delta_exact' => round($seller2PendingAfter - $seller2PendingBefore, 2),
             ],
@@ -285,7 +284,7 @@ class ChaosLabRunnerService
         $response = $this->midtransWebhookService->handleNotification($tamperedPayload);
         $invoice->refresh();
 
-        $spoofLog = PaymentWebhookLog::find($response['webhook_log_id'] ?? 0);
+        $spoofLog = PaymentWebhookLog::find((int) ($response['webhook_log_id'] ?? 0));
         $passed = ($response['http_status'] === 403)
             && ($response['signature_valid'] === false)
             && ($invoice->status === 'UNPAID')
@@ -691,6 +690,10 @@ class ChaosLabRunnerService
         $orders = $invoice->orders()->get();
         $deliveredOrder = $orders->firstWhere('delivery_method', 'instant_vault');
         $processingOrder = $orders->firstWhere('delivery_method', 'manual_trade');
+
+        if (! $deliveredOrder || ! $processingOrder) {
+            throw new DomainException('Skenario Chaos Lab #8 gagal membentuk pasangan pesanan instant_vault dan manual_trade.');
+        }
 
         // Time-travel BOTH orders!
         DB::table('orders')->where('id', $processingOrder->id)->update([

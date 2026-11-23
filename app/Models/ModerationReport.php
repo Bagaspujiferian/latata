@@ -38,11 +38,13 @@ class ModerationReport extends Model
         ];
     }
 
+    /** @return BelongsTo<User, $this> */
     public function reporter(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reporter_id', 'id');
     }
 
+    /** @return BelongsTo<User, $this> */
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by', 'id');
@@ -50,6 +52,6 @@ class ModerationReport extends Model
 
     public function reasonLabel(): string
     {
-        return self::REASON_LABELS[$this->reason_category] ?? $this->reason_category;
+        return self::REASON_LABELS[$this->reason_category];
     }
 }

@@ -30,16 +30,19 @@ class CategoryAttribute extends Model
         ];
     }
 
+    /** @return BelongsTo<GameCategory, $this> */
     public function gameCategory(): BelongsTo
     {
         return $this->belongsTo(GameCategory::class);
     }
 
+    /** @return HasMany<AttributeOption, $this> */
     public function options(): HasMany
     {
         return $this->hasMany(AttributeOption::class)->orderBy('sort_order')->orderBy('id');
     }
 
+    /** @return HasMany<ProductAttributeValue, $this> */
     public function values(): HasMany
     {
         return $this->hasMany(ProductAttributeValue::class);

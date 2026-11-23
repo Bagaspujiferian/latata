@@ -27,7 +27,7 @@ class BuyerOrderController extends Controller
 
     public function index(Request $request): View
     {
-        $user = $request->user();
+        $user = $this->requireUser($request);
         $statusFilter = $request->string('status')->toString();
 
         $ordersQuery = Order::with(['items.product.gameCategory.game', 'sellerProfile', 'paymentInvoice', 'review'])
@@ -56,7 +56,7 @@ class BuyerOrderController extends Controller
 
     public function show(Request $request, string $orderCode): View
     {
-        $user = $request->user();
+        $user = $this->requireUser($request);
         $order = Order::with([
             'items.product.gameCategory.game',
             'items.vault',
@@ -85,7 +85,8 @@ class BuyerOrderController extends Controller
         $order = Order::where('order_code', $orderCode)->firstOrFail();
 
         try {
-            $plaintext = $this->vaultService->decryptForAuthorizedBuyer($order, $orderItem, $request->user()->id);
+            $plaintext = $this->vaultService->decryptForAuthorizedBuyer($order, $orderItem, $this->requireUser($request)->id);
+            $orderItem->loadMissing('vault');
 
             return response()->json([
                 'ok' => true,
@@ -109,7 +110,7 @@ class BuyerOrderController extends Controller
         $order = Order::where('order_code', $orderCode)->firstOrFail();
 
         try {
-            $this->orderStateService->buyerClaimSlaBreachRefund($order->id, $request->user()->id);
+            $this->orderStateService->buyerClaimSlaBreachRefund($order->id, $this->requireUser($request)->id);
 
             return back()->with('success', 'Refund Pelanggaran SLA Berhasil! 100% dana pesanan telah masuk instan ke Saldo Aktif Anda.');
         } catch (DomainException $e) {
@@ -128,7 +129,7 @@ class BuyerOrderController extends Controller
         try {
             $this->orderStateService->buyerConfirmOrderCompleted(
                 orderId: $order->id,
-                buyerId: $request->user()->id,
+                buyerId: $this->requireUser($request)->id,
                 rating: isset($validated['rating']) ? (int) $validated['rating'] : null,
                 comment: $validated['comment'] ?? null,
             );
@@ -150,7 +151,7 @@ class BuyerOrderController extends Controller
         try {
             $this->orderStateService->buyerOpenDispute(
                 orderId: $order->id,
-                buyerId: $request->user()->id,
+                buyerId: $this->requireUser($request)->id,
                 reason: $validated['reason'],
                 proofUrl: $validated['attachment_proof_url'] ?? null,
             );
@@ -164,7 +165,7 @@ class BuyerOrderController extends Controller
     public function sendMessage(Request $request, string $orderCode): RedirectResponse
     {
         $order = Order::where('order_code', $orderCode)->firstOrFail();
-        $user = $request->user();
+        $user = $this->requireUser($request);
 
         if ((int) $order->buyer_id !== (int) $user->id && ! $user->isAdmin()) {
             abort(403);
@@ -191,7 +192,7 @@ class BuyerOrderController extends Controller
 
     public function wallet(Request $request): View
     {
-        $user = $request->user()->load('wallet');
+        $user = $this->requireUser($request)->load('wallet');
         $mutations = WalletMutation::with(['order', 'paymentInvoice'])
             ->where('user_id', $user->id)
             ->orderByDesc('id')

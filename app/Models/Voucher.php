@@ -44,21 +44,25 @@ class Voucher extends Model
         ];
     }
 
+    /** @return BelongsTo<SellerProfile, $this> */
     public function sellerProfile(): BelongsTo
     {
         return $this->belongsTo(SellerProfile::class, 'seller_id', 'user_id');
     }
 
+    /** @return BelongsTo<Game, $this> */
     public function game(): BelongsTo
     {
         return $this->belongsTo(Game::class);
     }
 
+    /** @return BelongsTo<User, $this> */
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by', 'id');
     }
 
+    /** @return HasMany<VoucherUsage, $this> */
     public function usages(): HasMany
     {
         return $this->hasMany(VoucherUsage::class);

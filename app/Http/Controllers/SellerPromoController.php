@@ -20,7 +20,7 @@ class SellerPromoController extends Controller
 
     public function vouchers(Request $request): View
     {
-        $user = $request->user()->load('sellerProfile');
+        $user = $this->requireUser($request)->load('sellerProfile');
 
         $vouchers = Voucher::with(['game'])
             ->withSum(['usages as applied_discount_total' => fn ($q) => $q->where('status', 'applied')], 'discount_amount')
@@ -53,10 +53,10 @@ class SellerPromoController extends Controller
 
         try {
             $voucher = $this->cmsService->createVoucher(
-                actorId: $request->user()->id,
+                actorId: $this->requireUser($request)->id,
                 issuerType: 'seller',
                 data: $validated,
-                sellerId: $request->user()->id,
+                sellerId: $this->requireUser($request)->id,
             );
 
             return back()->with('success', "Voucher Toko [{$voucher->code}] berhasil diterbitkan! Diskon ditanggung dari margin toko Anda.");
@@ -68,7 +68,7 @@ class SellerPromoController extends Controller
     public function toggleVoucher(Request $request, Voucher $voucher): RedirectResponse
     {
         try {
-            $updated = $this->cmsService->toggleVoucher($request->user()->id, $voucher->id, false);
+            $updated = $this->cmsService->toggleVoucher($this->requireUser($request)->id, $voucher->id, false);
             $label = $updated->is_active ? 'diaktifkan' : 'dinonaktifkan';
 
             return back()->with('success', "Voucher Toko [{$updated->code}] berhasil {$label}.");
@@ -84,7 +84,7 @@ class SellerPromoController extends Controller
         ]);
 
         try {
-            $this->warrantyService->transferAvailableToSecurityDeposit($request->user()->id, (float) $validated['amount']);
+            $this->warrantyService->transferAvailableToSecurityDeposit($this->requireUser($request)->id, (float) $validated['amount']);
 
             return back()->with('success', 'Dana Rp '.number_format((float) $validated['amount'], 0, ',', '.').' berhasil dikunci ke Deposit Jaminan Anti-Hackback.');
         } catch (DomainException $e) {

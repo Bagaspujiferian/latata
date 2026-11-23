@@ -21,7 +21,7 @@ class SellerAdCreditController extends Controller
 
     public function index(Request $request): View
     {
-        $user = $request->user()->load(['wallet', 'sellerProfile']);
+        $user = $this->requireUser($request)->load(['wallet', 'sellerProfile']);
         $packages = AdCreditPackage::where('is_active', true)
             ->orderBy('sort_order')
             ->orderBy('price')
@@ -52,14 +52,16 @@ class SellerAdCreditController extends Controller
         ]);
 
         try {
-            $this->walletPinService->verifyPinOrFail($request->user()->id, $request->input('wallet_pin'), true);
+            $this->walletPinService->verifyPinOrFail($this->requireUser($request)->id, $request->input('wallet_pin'), true);
 
             $purchase = $this->adCreditService->purchasePackageWithWallet(
-                sellerId: $request->user()->id,
+                sellerId: $this->requireUser($request)->id,
                 packageId: (int) $validated['package_id'],
             );
 
-            return back()->with('success', "Berhasil membeli {$purchase->package->name} (+{$purchase->credits_granted} kredit sundul)! Ref: {$purchase->purchase_code}.");
+            $packageName = $purchase->package->name ?? 'Paket Kredit';
+
+            return back()->with('success', "Berhasil membeli {$packageName} (+{$purchase->credits_granted} kredit sundul)! Ref: {$purchase->purchase_code}.");
         } catch (DomainException $e) {
             return back()->with('error', $e->getMessage());
         }
@@ -68,7 +70,7 @@ class SellerAdCreditController extends Controller
     public function boostFeatured(Request $request, Product $product): RedirectResponse
     {
         try {
-            $updated = $this->adCreditService->boostProductFeatured($request->user()->id, $product->id, 3);
+            $updated = $this->adCreditService->boostProductFeatured($this->requireUser($request)->id, $product->id, 3);
 
             return back()->with('success', "Produk \"{$updated->title}\" berhasil dipromosikan sebagai Featured Product (3 Kredit terpakai)!");
         } catch (DomainException $e) {

@@ -49,7 +49,7 @@ class ExportController extends Controller
         $from = $request->filled('from') ? $request->string('from')->toString() : null;
         $to = $request->filled('to') ? $request->string('to')->toString() : null;
 
-        return $this->exportService->streamSellerOrdersCsv($request->user()->id, $from, $to);
+        return $this->exportService->streamSellerOrdersCsv($this->requireUser($request)->id, $from, $to);
     }
 
     public function sellerMutationsCsv(Request $request): StreamedResponse
@@ -57,6 +57,6 @@ class ExportController extends Controller
         $from = $request->filled('from') ? $request->string('from')->toString() : null;
         $to = $request->filled('to') ? $request->string('to')->toString() : null;
 
-        return $this->exportService->streamSellerMutationsCsv($request->user()->id, $from, $to);
+        return $this->exportService->streamSellerMutationsCsv($this->requireUser($request)->id, $from, $to);
     }
 }

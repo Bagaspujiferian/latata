@@ -26,10 +26,15 @@ class GameNicknameService
 
         $cachedPayload = Cache::get($cacheKey);
         if (is_array($cachedPayload)) {
-            $cachedPayload['cached'] = true;
-            $cachedPayload['latency_ms'] = 4;
-
-            return $cachedPayload;
+            return [
+                'valid' => (bool) ($cachedPayload['valid'] ?? false),
+                'nickname' => isset($cachedPayload['nickname']) ? (string) $cachedPayload['nickname'] : null,
+                'region' => isset($cachedPayload['region']) ? (string) $cachedPayload['region'] : null,
+                'provider' => (string) ($cachedPayload['provider'] ?? $provider),
+                'latency_ms' => 4,
+                'message' => (string) ($cachedPayload['message'] ?? 'Nickname terverifikasi dari cache.'),
+                'cached' => true,
+            ];
         }
 
         $result = match ($game->slug) {
@@ -49,7 +54,7 @@ class GameNicknameService
 
         $result['cached'] = false;
 
-        if (($result['valid'] ?? false) === true) {
+        if ($result['valid'] === true) {
             Cache::put($cacheKey, $result, now()->addMinutes(15));
         }
 

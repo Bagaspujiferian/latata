@@ -59,7 +59,7 @@ class WalletTopUpService
 
             // Strict Idempotency: if already PAID, return cleanly with zero duplicate credit!
             if ($topupRow->status === 'PAID') {
-                return WalletTopUp::findOrFail($topupRow->id);
+                return WalletTopUp::findOrFail((int) $topupRow->id);
             }
 
             if ($topupRow->status !== 'UNPAID') {
@@ -84,7 +84,7 @@ class WalletTopUpService
                     'updated_at' => now(),
                 ]);
 
-            $topup = WalletTopUp::findOrFail($topupRow->id);
+            $topup = WalletTopUp::findOrFail((int) $topupRow->id);
             $userId = (int) $topup->user_id;
             $topupId = (int) $topup->id;
 

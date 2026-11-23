@@ -26,21 +26,25 @@ class VoucherUsage extends Model
         ];
     }
 
+    /** @return BelongsTo<Voucher, $this> */
     public function voucher(): BelongsTo
     {
         return $this->belongsTo(Voucher::class);
     }
 
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /** @return BelongsTo<PaymentInvoice, $this> */
     public function paymentInvoice(): BelongsTo
     {
         return $this->belongsTo(PaymentInvoice::class);
     }
 
+    /** @return BelongsTo<Order, $this> */
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);

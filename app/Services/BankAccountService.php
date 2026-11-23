@@ -102,7 +102,7 @@ class BankAccountService
             $target->is_primary = true;
             $target->save();
 
-            return $target->fresh();
+            return $target->refresh();
         });
     }
 

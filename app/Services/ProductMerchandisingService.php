@@ -210,7 +210,7 @@ class ProductMerchandisingService
                 $this->vaultService->syncVaultStockWithinLock($product->id);
             }
 
-            return $product->fresh();
+            return $product->refresh();
         });
     }
 }

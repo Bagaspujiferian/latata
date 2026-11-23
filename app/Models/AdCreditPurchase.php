@@ -27,16 +27,19 @@ class AdCreditPurchase extends Model
         ];
     }
 
+    /** @return BelongsTo<User, $this> */
     public function seller(): BelongsTo
     {
         return $this->belongsTo(User::class, 'seller_id', 'id');
     }
 
+    /** @return BelongsTo<SellerProfile, $this> */
     public function sellerProfile(): BelongsTo
     {
         return $this->belongsTo(SellerProfile::class, 'seller_id', 'user_id');
     }
 
+    /** @return BelongsTo<AdCreditPackage, $this> */
     public function package(): BelongsTo
     {
         return $this->belongsTo(AdCreditPackage::class, 'package_id', 'id');

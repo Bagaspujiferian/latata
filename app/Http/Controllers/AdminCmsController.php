@@ -56,7 +56,7 @@ class AdminCmsController extends Controller
         try {
             $validated['requires_nickname_check'] = $request->boolean('requires_nickname_check');
             $validated['is_popular'] = $request->boolean('is_popular');
-            $game = $this->cmsService->createGame($request->user()->id, $validated);
+            $game = $this->cmsService->createGame($this->requireUser($request)->id, $validated);
 
             return back()->with('success', "Game {$game->name} berhasil ditambahkan dan dicatat ke Admin Audit Log.");
         } catch (DomainException $e) {
@@ -75,7 +75,7 @@ class AdminCmsController extends Controller
 
         try {
             $validated['is_popular'] = $request->boolean('is_popular');
-            $game = $this->cmsService->updateGame($request->user()->id, $id, $validated);
+            $game = $this->cmsService->updateGame($this->requireUser($request)->id, $id, $validated);
 
             return back()->with('success', "Game {$game->name} berhasil diperbarui.");
         } catch (DomainException $e) {
@@ -85,7 +85,7 @@ class AdminCmsController extends Controller
 
     public function toggleGame(Request $request, int $id): RedirectResponse
     {
-        $game = $this->cmsService->toggleGameActive($request->user()->id, $id);
+        $game = $this->cmsService->toggleGameActive($this->requireUser($request)->id, $id);
 
         return back()->with('success', "Status aktif game {$game->name} diubah.");
     }
@@ -103,7 +103,7 @@ class AdminCmsController extends Controller
         ]);
 
         try {
-            $cat = $this->cmsService->createCategory($request->user()->id, $validated);
+            $cat = $this->cmsService->createCategory($this->requireUser($request)->id, $validated);
 
             return back()->with('success', "Kategori {$cat->name} (Escrow {$cat->escrow_hold_hours}j, Garansi {$cat->warranty_days} hari) berhasil dibuat.");
         } catch (DomainException $e) {
@@ -123,7 +123,7 @@ class AdminCmsController extends Controller
         ]);
 
         try {
-            $cat = $this->cmsService->updateCategory($request->user()->id, $id, $validated);
+            $cat = $this->cmsService->updateCategory($this->requireUser($request)->id, $id, $validated);
 
             return back()->with('success', "Konfigurasi kategori {$cat->name} berhasil diperbarui & dicatat ke Audit Log.");
         } catch (DomainException $e) {
@@ -146,7 +146,7 @@ class AdminCmsController extends Controller
         try {
             $validated['is_required'] = $request->boolean('is_required');
             $validated['is_filterable'] = $request->boolean('is_filterable', true);
-            $attr = $this->cmsService->createAttribute($request->user()->id, $validated);
+            $attr = $this->cmsService->createAttribute($this->requireUser($request)->id, $validated);
 
             return back()->with('success', "Atribut filter [{$attr->name}] berhasil ditambahkan.");
         } catch (DomainException $e) {
@@ -161,7 +161,7 @@ class AdminCmsController extends Controller
         ]);
 
         try {
-            $opt = $this->cmsService->addAttributeOption($request->user()->id, $attributeId, $validated['label']);
+            $opt = $this->cmsService->addAttributeOption($this->requireUser($request)->id, $attributeId, $validated['label']);
 
             return back()->with('success', "Opsi [{$opt->label}] berhasil ditambahkan.");
         } catch (DomainException $e) {
@@ -171,7 +171,7 @@ class AdminCmsController extends Controller
 
     public function deleteAttributeOption(Request $request, int $optionId): RedirectResponse
     {
-        $this->cmsService->deleteAttributeOption($request->user()->id, $optionId);
+        $this->cmsService->deleteAttributeOption($this->requireUser($request)->id, $optionId);
 
         return back()->with('success', 'Opsi atribut dihapus.');
     }
@@ -223,7 +223,7 @@ class AdminCmsController extends Controller
         ]);
 
         try {
-            $voucher = $this->cmsService->createVoucher($request->user()->id, 'platform', $validated);
+            $voucher = $this->cmsService->createVoucher($this->requireUser($request)->id, 'platform', $validated);
 
             return back()->with('success', "Voucher Subsidi Platform [{$voucher->code}] resmi aktif!");
         } catch (DomainException $e) {
@@ -233,7 +233,7 @@ class AdminCmsController extends Controller
 
     public function toggleVoucher(Request $request, int $voucherId): RedirectResponse
     {
-        $voucher = $this->cmsService->toggleVoucher($request->user()->id, $voucherId, true);
+        $voucher = $this->cmsService->toggleVoucher($this->requireUser($request)->id, $voucherId, true);
 
         return back()->with('success', "Status voucher [{$voucher->code}] diperbarui.");
     }
@@ -247,7 +247,7 @@ class AdminCmsController extends Controller
             'ends_at' => ['required', 'date', 'after:starts_at'],
         ]);
 
-        $sale = $this->cmsService->createFlashSale($request->user()->id, $validated);
+        $sale = $this->cmsService->createFlashSale($this->requireUser($request)->id, $validated);
 
         return back()->with('success', "Event Flash Sale \"{$sale->title}\" berhasil dibuat.");
     }
@@ -262,9 +262,11 @@ class AdminCmsController extends Controller
         ]);
 
         try {
-            $item = $this->cmsService->attachFlashSaleItem($request->user()->id, $flashSaleId, $validated);
+            $item = $this->cmsService->attachFlashSaleItem($this->requireUser($request)->id, $flashSaleId, $validated);
 
-            return back()->with('success', "Produk {$item->product->title} ditambahkan ke Flash Sale dengan harga Rp ".number_format((float) $item->flash_price, 0, ',', '.').'.');
+            $productTitle = $item->product->title ?? 'Produk';
+
+            return back()->with('success', "Produk {$productTitle} ditambahkan ke Flash Sale dengan harga Rp ".number_format((float) $item->flash_price, 0, ',', '.').'.');
         } catch (DomainException $e) {
             return back()->with('error', $e->getMessage());
         }
@@ -302,7 +304,7 @@ class AdminCmsController extends Controller
         ]);
 
         try {
-            $this->cmsService->resolveReport($request->user()->id, $report->id, $validated['action_type'], $validated['resolution_notes']);
+            $this->cmsService->resolveReport($this->requireUser($request)->id, $report->id, $validated['action_type'], $validated['resolution_notes']);
 
             return back()->with('success', "Laporan moderasi #{$report->id} selesai ditindaklanjuti dan tercatat di Audit Log.");
         } catch (DomainException $e) {

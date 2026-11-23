@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Models\PaymentWebhookLog;
+use App\Models\Wallet;
 use App\Models\WalletMutation;
 use App\Models\WithdrawalRequest;
 use App\Services\ChaosLabRunnerService;
@@ -62,7 +63,7 @@ class AdminChaosLabController extends Controller
 
             $this->orderStateService->adminResolveDispute(
                 orderId: $order->id,
-                adminId: $request->user()->id,
+                adminId: $this->requireUser($request)->id,
                 verdict: $validated['verdict'],
                 adminNotes: $validated['admin_notes'],
                 buyerRefundPercent: $buyerPct,
@@ -91,7 +92,7 @@ class AdminChaosLabController extends Controller
 
         $this->chatModerationService->postOrderMessage(
             order: $order,
-            sender: $request->user(),
+            sender: $this->requireUser($request),
             rawMessage: $validated['message'],
             senderRoleOverride: 'admin',
         );
@@ -112,7 +113,7 @@ class AdminChaosLabController extends Controller
     public function approveWithdrawal(Request $request, int $id): RedirectResponse
     {
         try {
-            $wd = $this->orderStateService->approveWithdrawal($id, $request->user()->id);
+            $wd = $this->orderStateService->approveWithdrawal($id, $this->requireUser($request)->id);
 
             return back()->with('success', "Penarikan {$wd->withdraw_code} disetujui & ditandai PAID (Rp ".number_format((float) $wd->net_payout, 0, ',', '.').').');
         } catch (AuthorizationException $e) {
@@ -129,7 +130,7 @@ class AdminChaosLabController extends Controller
         ]);
 
         try {
-            $wd = $this->orderStateService->rejectWithdrawal($id, $request->user()->id, $validated['rejection_reason']);
+            $wd = $this->orderStateService->rejectWithdrawal($id, $this->requireUser($request)->id, $validated['rejection_reason']);
 
             return back()->with('success', "Penarikan {$wd->withdraw_code} ditolak. Saldo Rp ".number_format((float) $wd->amount, 0, ',', '.').' otomatis dikembalikan via WITHDRAW_REJECT_REFUND.');
         } catch (AuthorizationException $e) {
@@ -145,8 +146,8 @@ class AdminChaosLabController extends Controller
         $recentMutations = WalletMutation::with('user')->orderByDesc('id')->limit(15)->get();
 
         $systemTelemetry = [
-            'total_escrow_locked' => (float) \App\Models\Wallet::sum('pending_balance'),
-            'total_available_liquidity' => (float) \App\Models\Wallet::sum('available_balance'),
+            'total_escrow_locked' => (float) Wallet::sum('pending_balance'),
+            'total_available_liquidity' => (float) Wallet::sum('available_balance'),
             'active_disputes' => Order::where('status', 'DISPUTED')->count(),
             'pending_withdrawals' => WithdrawalRequest::where('status', 'PENDING')->count(),
             'webhook_logs_count' => PaymentWebhookLog::count(),

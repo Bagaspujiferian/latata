@@ -11,7 +11,6 @@ use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class AccountWarrantyService
@@ -32,7 +31,7 @@ class AccountWarrantyService
 
         $warrantyDays = 0;
         foreach ($order->items as $item) {
-            $catDays = (int) ($item->product?->gameCategory?->warranty_days ?? 0);
+            $catDays = (int) ($item->product?->gameCategory->warranty_days ?? 0);
             if ($catDays > $warrantyDays) {
                 $warrantyDays = $catDays;
             }
@@ -132,11 +131,13 @@ class AccountWarrantyService
                 'status' => 'open',
             ]);
 
+            $orderCode = $warranty->order->order_code ?? "#{$warranty->order_id}";
+
             $this->notificationService->notify(
                 userId: (int) $warranty->seller_id,
                 category: 'warranty',
                 title: "Klaim Garansi Hackback Masuk: {$claimCode}",
-                body: "Pembeli mengajukan klaim Anti-Hackback untuk pesanan {$warranty->order->order_code}. Tim Risiko Admin sedang meninjau.",
+                body: "Pembeli mengajukan klaim Anti-Hackback untuk pesanan {$orderCode}. Tim Risiko Admin sedang meninjau.",
                 actionUrl: '/seller/wallet',
                 refType: 'warranty_claim',
                 refId: (int) $claim->id,
@@ -145,13 +146,13 @@ class AccountWarrantyService
             $this->notificationService->notifyAdmins(
                 category: 'warranty',
                 title: "Klaim Garansi Baru: {$claimCode}",
-                body: "Klaim Anti-Hackback senilai Rp ".number_format((float) $warranty->coverage_amount, 0, ',', '.')." untuk {$warranty->order->order_code} menunggu putusan.",
+                body: 'Klaim Anti-Hackback senilai Rp '.number_format((float) $warranty->coverage_amount, 0, ',', '.')." untuk {$orderCode} menunggu putusan.",
                 actionUrl: '/admin/warranties',
                 refType: 'warranty_claim',
                 refId: (int) $claim->id,
             );
 
-            return $claim->fresh(['warranty', 'order', 'buyer', 'sellerProfile']);
+            return $claim->refresh()->load(['warranty', 'order', 'buyer', 'sellerProfile']);
         });
     }
 
@@ -194,7 +195,7 @@ class AccountWarrantyService
             if ($decision === 'REJECT') {
                 $claim->status = 'rejected';
                 $claim->admin_resolution_notes = $trimmedNotes;
-                $claim->resolved_by = $adminId;
+                $claim->resolved_by = $admin->id;
                 $claim->resolved_at = now();
                 $claim->save();
 
@@ -221,7 +222,7 @@ class AccountWarrantyService
                     refId: (int) $claim->id,
                 );
 
-                return $claim->fresh(['warranty', 'order', 'buyer', 'sellerProfile', 'resolver']);
+                return $claim->refresh()->load(['warranty', 'order', 'buyer', 'sellerProfile', 'resolver']);
             }
 
             // APPROVE_REFUND: Non-negative clawback waterfall (security_deposit -> available -> clawback_debt + suspend) + 100% buyer refund
@@ -247,11 +248,11 @@ class AccountWarrantyService
             }
 
             $claim->status = 'approved_refund';
-            $claim->clawback_from_deposit = number_format($clawback['from_deposit'], 2, '.', '');
-            $claim->clawback_from_available = number_format($clawback['from_available'], 2, '.', '');
-            $claim->recorded_seller_debt = number_format($clawback['recorded_debt'], 2, '.', '');
+            $claim->clawback_from_deposit = round((float) $clawback['from_deposit'], 2);
+            $claim->clawback_from_available = round((float) $clawback['from_available'], 2);
+            $claim->recorded_seller_debt = round((float) $clawback['recorded_debt'], 2);
             $claim->admin_resolution_notes = $trimmedNotes;
-            $claim->resolved_by = $adminId;
+            $claim->resolved_by = $admin->id;
             $claim->resolved_at = now();
             $claim->save();
 
@@ -297,7 +298,7 @@ class AccountWarrantyService
                 refId: (int) $claim->id,
             );
 
-            return $claim->fresh(['warranty', 'order', 'buyer', 'sellerProfile', 'resolver']);
+            return $claim->refresh()->load(['warranty', 'order', 'buyer', 'sellerProfile', 'resolver']);
         });
     }
 

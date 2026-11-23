@@ -35,16 +35,19 @@ class WithdrawalRequest extends Model
         ];
     }
 
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /** @return BelongsTo<User, $this> */
     public function processor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'processed_by', 'id');
     }
 
+    /** @return BelongsTo<UserBankAccount, $this> */
     public function bankAccount(): BelongsTo
     {
         return $this->belongsTo(UserBankAccount::class, 'user_bank_account_id', 'id')->withTrashed();

@@ -351,7 +351,7 @@ class MidtransWebhookService
                         orderCode: $order->order_code,
                     );
 
-                    $dispatchedOrder = $this->fulfillmentDispatcher->dispatch($order->fresh());
+                    $dispatchedOrder = $this->fulfillmentDispatcher->dispatch($order->refresh());
 
                     $dispatchedSummary[] = [
                         'order_code' => $dispatchedOrder->order_code,
@@ -387,7 +387,7 @@ class MidtransWebhookService
             }
 
             if (in_array($transactionStatus, ['expire', 'cancel', 'deny'], true) && $invoiceRow->status === 'UNPAID') {
-                $invoiceModel = PaymentInvoice::findOrFail($invoiceRow->id);
+                $invoiceModel = PaymentInvoice::findOrFail((int) $invoiceRow->id);
                 $expiryResult = $this->orderStateAndSlaService->expireInvoiceWithinTransaction(
                     $invoiceModel,
                     "Midtrans status: {$transactionStatus}",

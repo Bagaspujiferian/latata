@@ -25,7 +25,7 @@ class WalletTopUpController extends Controller
 
         try {
             $topup = $this->topUpService->createTopUp(
-                userId: $request->user()->id,
+                userId: $this->requireUser($request)->id,
                 amount: (float) $validated['amount'],
                 channel: (string) ($validated['payment_channel'] ?? 'midtrans_snap'),
             );
@@ -41,7 +41,7 @@ class WalletTopUpController extends Controller
     public function show(Request $request, string $topupCode): View
     {
         $topup = WalletTopUp::where('topup_code', $topupCode)->firstOrFail();
-        $user = $request->user();
+        $user = $this->requireUser($request);
 
         if ((int) $topup->user_id !== (int) $user->id && ! $user->isAdmin()) {
             abort(403, 'Anda tidak memiliki akses ke tagihan Top-Up ini.');
@@ -53,7 +53,7 @@ class WalletTopUpController extends Controller
     public function simulatePay(Request $request, string $topupCode): RedirectResponse
     {
         $topup = WalletTopUp::where('topup_code', $topupCode)->firstOrFail();
-        $user = $request->user();
+        $user = $this->requireUser($request);
 
         if ((int) $topup->user_id !== (int) $user->id && ! $user->isAdmin()) {
             abort(403, 'Anda tidak memiliki akses ke tagihan Top-Up ini.');

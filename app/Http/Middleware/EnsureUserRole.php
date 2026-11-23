@@ -25,7 +25,7 @@ class EnsureUserRole
             }
 
             return redirect()->route('marketplace.index')
-                ->with('error', "Akses dibatasi untuk peran [".implode(', ', $roles)."]. Gunakan Switcher di bilah atas untuk berganti peran.");
+                ->with('error', 'Akses dibatasi untuk peran ['.implode(', ', $roles).']. Gunakan Switcher di bilah atas untuk berganti peran.');
         }
 
         return $next($request);

@@ -5,7 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property Carbon|null $expires_at
+ * @property Carbon|null $paid_at
+ */
 class PaymentInvoice extends Model
 {
     /** @var list<string> */
@@ -41,16 +46,19 @@ class PaymentInvoice extends Model
         ];
     }
 
+    /** @return BelongsTo<User, $this> */
     public function buyer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'buyer_id', 'id');
     }
 
+    /** @return HasMany<Order, $this> */
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class, 'payment_invoice_id', 'id');
     }
 
+    /** @return HasMany<WalletMutation, $this> */
     public function walletMutations(): HasMany
     {
         return $this->hasMany(WalletMutation::class, 'payment_invoice_id', 'id');

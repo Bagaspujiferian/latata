@@ -51,11 +51,11 @@ class ConversationService
 
             if ($conversation) {
                 $dirty = false;
-                if ($productId !== null && (int) $conversation->context_product_id !== $productId) {
+                if ($productId !== null && $productId > 0 && (int) $conversation->context_product_id !== $productId) {
                     $conversation->context_product_id = $productId;
                     $dirty = true;
                 }
-                if ($orderId !== null && (int) $conversation->context_order_id !== $orderId) {
+                if ($orderId !== null && $orderId > 0 && (int) $conversation->context_order_id !== $orderId) {
                     $conversation->context_order_id = $orderId;
                     $dirty = true;
                 }
@@ -63,7 +63,7 @@ class ConversationService
                     $conversation->save();
                 }
 
-                return $conversation->fresh(['buyer', 'seller', 'sellerProfile', 'contextProduct']);
+                return $conversation->refresh()->load(['buyer', 'seller', 'sellerProfile', 'contextProduct']);
             }
 
             return Conversation::create([
@@ -138,10 +138,10 @@ class ConversationService
             $conversation->last_message_preview = $preview;
             $conversation->last_message_at = $now;
 
-            if ($attachedProductId !== null) {
+            if ($attachedProductId !== null && $attachedProductId > 0) {
                 $conversation->context_product_id = $attachedProductId;
             }
-            if ($attachedOrderId !== null) {
+            if ($attachedOrderId !== null && $attachedOrderId > 0) {
                 $conversation->context_order_id = $attachedOrderId;
             }
 
@@ -155,7 +155,7 @@ class ConversationService
             $sender = User::with('sellerProfile')->find($senderId);
             $senderLabel = $isSeller && $sender?->sellerProfile
                 ? $sender->sellerProfile->store_name
-                : ($sender?->name ?? 'Pengguna NexaTrade');
+                : ($sender->name ?? 'Pengguna NexaTrade');
 
             $this->notificationService->notify(
                 userId: $recipientId,

@@ -60,7 +60,7 @@ class AdminFinanceController extends Controller
 
     public function runLedgerAudit(Request $request): RedirectResponse|JsonResponse
     {
-        $admin = $request->user();
+        $admin = $this->requireUser($request);
         $snapshot = $this->financeService->runGlobalLedgerAudit('admin:'.$admin->email);
 
         $this->auditService->recordAudit(
@@ -95,7 +95,7 @@ class AdminFinanceController extends Controller
         $report = $this->h2hReconciliationService->reconcileStaleOrders($minutes);
 
         $this->auditService->recordAudit(
-            adminId: $request->user()->id,
+            adminId: $this->requireUser($request)->id,
             action: 'FINANCE_H2H_RECONCILE_RUN',
             entityType: 'h2h_reconciliation',
             entityId: null,

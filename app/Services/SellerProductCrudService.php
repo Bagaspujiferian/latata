@@ -12,6 +12,7 @@ use App\Models\ProductVault;
 use App\Models\SellerProfile;
 use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -54,7 +55,8 @@ class SellerProductCrudService
                 $slug = $baseSlug.'-'.strtolower(Str::random(6));
             }
 
-            $skuCode = strtoupper(Str::substr(Str::slug($category->game->name, ''), 0, 4)).'-'.strtoupper(Str::random(6));
+            $gameName = $category->game->name ?? 'SKU';
+            $skuCode = strtoupper(Str::substr(Str::slug($gameName, ''), 0, 4)).'-'.strtoupper(Str::random(6));
             while (Product::withTrashed()->where('sku_code', $skuCode)->exists()) {
                 $skuCode = 'SKU-'.strtoupper(Str::random(7));
             }
@@ -97,7 +99,7 @@ class SellerProductCrudService
                 $primaryUploadIndex = 0;
             }
 
-            foreach (array_values($uploadedImages) as $idx => $file) {
+            foreach ($uploadedImages as $idx => $file) {
                 $storedPath = $this->imageUploadService->storeSanitizedImage($file, 'public', "products/{$product->id}", 2048);
 
                 ProductImage::create([
@@ -109,7 +111,7 @@ class SellerProductCrudService
                 ]);
             }
 
-            return $product->fresh(['gameCategory.game', 'images', 'attributeValues.attribute', 'attributeValues.option']);
+            return $product->refresh()->load(['gameCategory.game', 'images', 'attributeValues.attribute', 'attributeValues.option']);
         });
     }
 
@@ -162,7 +164,7 @@ class SellerProductCrudService
                 $product->description = trim((string) $data['description']);
             }
             if (isset($data['price'])) {
-                $product->price = number_format((float) $data['price'], 2, '.', '');
+                $product->price = round((float) $data['price'], 2);
             }
             if (isset($data['min_order'])) {
                 $product->min_order = max(1, (int) $data['min_order']);
@@ -251,7 +253,7 @@ class SellerProductCrudService
                 $chosenPrimary->save();
             }
 
-            return $product->fresh(['gameCategory.game', 'images', 'attributeValues.attribute', 'attributeValues.option']);
+            return $product->refresh()->load(['gameCategory.game', 'images', 'attributeValues.attribute', 'attributeValues.option']);
         });
     }
 
@@ -311,7 +313,7 @@ class SellerProductCrudService
                 $this->vaultService->syncVaultStockWithinLock($product->id);
             }
 
-            return $product->fresh();
+            return $product->refresh();
         });
     }
 
@@ -330,12 +332,12 @@ class SellerProductCrudService
             $product->is_active = ! $product->is_active;
             $product->save();
 
-            return $product->fresh();
+            return $product->refresh();
         });
     }
 
     /**
-     * @param  \Illuminate\Database\Eloquent\Collection<int, CategoryAttribute>  $definitions
+     * @param  Collection<int, CategoryAttribute>  $definitions
      * @param  array<int|string, mixed>  $attributeInputs
      */
     private function syncAttributesWithinTransaction(Product $product, $definitions, array $attributeInputs): void

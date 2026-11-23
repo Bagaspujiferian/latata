@@ -112,9 +112,7 @@ class EnsureIdempotentRequest
         try {
             $response = $next($request);
         } catch (Throwable $e) {
-            if ($record) {
-                $record->delete();
-            }
+            $record->delete();
             throw $e;
         }
 

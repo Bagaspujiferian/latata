@@ -125,7 +125,7 @@ class AuthController extends Controller
 
     public function security(Request $request): View
     {
-        $user = $request->user()->fresh(['wallet', 'sellerProfile']);
+        $user = $this->requireUser($request)->refresh()->load(['wallet', 'sellerProfile']);
 
         return view('auth.security', compact('user'));
     }
@@ -137,7 +137,7 @@ class AuthController extends Controller
             'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
 
-        $user = $request->user();
+        $user = $this->requireUser($request);
         if (! Hash::check($validated['current_password'], $user->password)) {
             return back()->withErrors(['current_password' => 'Kata sandi saat ini tidak sesuai.']);
         }
@@ -166,15 +166,17 @@ class AuthController extends Controller
             'pin' => ['required', 'digits:6', 'confirmed'],
         ]);
 
+        $user = $this->requireUser($request);
+
         try {
             $this->walletPinService->setPin(
-                userId: $request->user()->id,
+                userId: $user->id,
                 pin: $validated['pin'],
                 currentPassword: $validated['current_password'],
             );
 
             DB::table('wallet_pin_reset_tokens')
-                ->where('user_id', $request->user()->id)
+                ->where('user_id', $user->id)
                 ->whereNull('used_at')
                 ->delete();
 

@@ -1,5 +1,10 @@
 <?php
 
+use App\Http\Middleware\AddSecurityHeaders;
+use App\Http\Middleware\EnsureIdempotentRequest;
+use App\Http\Middleware\EnsureSimulationModeEnabled;
+use App\Http\Middleware\EnsureUserNotBanned;
+use App\Http\Middleware\EnsureUserRole;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -13,13 +18,13 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->appendToGroup('web', \App\Http\Middleware\EnsureUserNotBanned::class);
-        $middleware->appendToGroup('web', \App\Http\Middleware\AddSecurityHeaders::class);
+        $middleware->appendToGroup('web', EnsureUserNotBanned::class);
+        $middleware->appendToGroup('web', AddSecurityHeaders::class);
 
         $middleware->alias([
-            'role' => \App\Http\Middleware\EnsureUserRole::class,
-            'idempotent' => \App\Http\Middleware\EnsureIdempotentRequest::class,
-            'simulation.only' => \App\Http\Middleware\EnsureSimulationModeEnabled::class,
+            'role' => EnsureUserRole::class,
+            'idempotent' => EnsureIdempotentRequest::class,
+            'simulation.only' => EnsureSimulationModeEnabled::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

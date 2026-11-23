@@ -29,11 +29,13 @@ class FlashSale extends Model
         ];
     }
 
+    /** @return BelongsTo<User, $this> */
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by', 'id');
     }
 
+    /** @return HasMany<FlashSaleItem, $this> */
     public function items(): HasMany
     {
         return $this->hasMany(FlashSaleItem::class)->orderBy('sort_order')->orderBy('id');

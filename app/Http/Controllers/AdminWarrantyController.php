@@ -83,7 +83,7 @@ class AdminWarrantyController extends Controller
         try {
             $resolved = $this->warrantyService->resolveWarrantyClaim(
                 claimId: $claim->id,
-                adminId: $request->user()->id,
+                adminId: $this->requireUser($request)->id,
                 decision: $validated['decision'],
                 adminNotes: $validated['admin_resolution_notes'],
             );

@@ -26,21 +26,25 @@ class ProductAttributeValue extends Model
         ];
     }
 
+    /** @return BelongsTo<Product, $this> */
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
     }
 
+    /** @return BelongsTo<CategoryAttribute, $this> */
     public function categoryAttribute(): BelongsTo
     {
         return $this->belongsTo(CategoryAttribute::class);
     }
 
+    /** @return BelongsTo<CategoryAttribute, $this> */
     public function attribute(): BelongsTo
     {
         return $this->belongsTo(CategoryAttribute::class, 'category_attribute_id', 'id');
     }
 
+    /** @return BelongsTo<AttributeOption, $this> */
     public function option(): BelongsTo
     {
         return $this->belongsTo(AttributeOption::class, 'attribute_option_id', 'id');
@@ -54,7 +58,7 @@ class ProductAttributeValue extends Model
         }
 
         return match ($attr->input_type) {
-            'select' => $this->option?->label ?? '-',
+            'select' => $this->option->label ?? '-',
             'number' => $this->numeric_value !== null
                 ? number_format($this->numeric_value, 0, ',', '.').($attr->unit_label ? ' '.$attr->unit_label : '')
                 : '-',

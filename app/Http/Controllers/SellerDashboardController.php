@@ -16,7 +16,6 @@ use App\Services\OrderStateAndSlaService;
 use App\Services\ProductMerchandisingService;
 use App\Services\SecureImageUploadService;
 use App\Services\SellerCatalogService;
-use App\Services\StorefrontEngagementService;
 use App\Services\StorefrontService;
 use App\Services\VaultEncryptionService;
 use App\Services\WalletPinService;
@@ -24,7 +23,6 @@ use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class SellerDashboardController extends Controller
@@ -35,7 +33,6 @@ class SellerDashboardController extends Controller
         private readonly OrderStateAndSlaService $orderStateService,
         private readonly ChatModerationService $chatModerationService,
         private readonly ProductMerchandisingService $merchandisingService,
-        private readonly StorefrontEngagementService $engagementService,
         private readonly StorefrontService $storefrontService,
         private readonly WalletPinService $walletPinService,
         private readonly SecureImageUploadService $imageUploadService,
@@ -43,7 +40,7 @@ class SellerDashboardController extends Controller
 
     public function dashboard(Request $request): View
     {
-        $user = $request->user()->load(['sellerProfile.operatingHours', 'wallet']);
+        $user = $this->requireUser($request)->load(['sellerProfile.operatingHours', 'wallet']);
 
         $activeQueueCount = Order::where('seller_id', $user->id)
             ->where('status', 'PROCESSING')
@@ -83,7 +80,7 @@ class SellerDashboardController extends Controller
 
     public function toggleStoreOpen(Request $request): RedirectResponse
     {
-        $profile = $this->catalogService->toggleStoreOpen($request->user()->id);
+        $profile = $this->catalogService->toggleStoreOpen($this->requireUser($request)->id);
         $stateText = $profile->is_store_open ? 'BUKA (Menerima Manual Trade + 24/7 Instan)' : 'TUTUP (Manual Trade dijeda, Brankas Instan & H2H tetap aktif 24/7)';
 
         return back()->with('success', "Status toko diperbarui: {$stateText}.");
@@ -91,7 +88,7 @@ class SellerDashboardController extends Controller
 
     public function products(Request $request): View
     {
-        $user = $request->user()->load('sellerProfile');
+        $user = $this->requireUser($request)->load('sellerProfile');
 
         $products = Product::with([
             'gameCategory.game',
@@ -135,7 +132,7 @@ class SellerDashboardController extends Controller
         ]);
 
         try {
-            $product = $this->catalogService->createProduct($request->user()->id, $validated);
+            $product = $this->catalogService->createProduct($this->requireUser($request)->id, $validated);
 
             return back()->with('success', "Produk {$product->title} ({$product->sku_code}) berhasil dibuat.");
         } catch (DomainException $e) {
@@ -154,7 +151,7 @@ class SellerDashboardController extends Controller
         ]);
 
         try {
-            $product = $this->catalogService->updateProduct($id, $request->user()->id, $validated);
+            $product = $this->catalogService->updateProduct($id, $this->requireUser($request)->id, $validated);
 
             return back()->with('success', "Produk {$product->title} berhasil diperbarui (Stok terverifikasi: {$product->stock}).");
         } catch (DomainException $e) {
@@ -165,7 +162,7 @@ class SellerDashboardController extends Controller
     public function archiveProduct(Request $request, int $id): RedirectResponse
     {
         try {
-            $this->merchandisingService->softDeleteProduct($id, $request->user()->id);
+            $this->merchandisingService->softDeleteProduct($id, $this->requireUser($request)->id);
 
             return back()->with('success', 'Produk berhasil diarsipkan (soft-delete). Riwayat pesanan lama tetap utuh.');
         } catch (DomainException $e) {
@@ -176,7 +173,7 @@ class SellerDashboardController extends Controller
     public function restoreProduct(Request $request, int $id): RedirectResponse
     {
         try {
-            $product = $this->merchandisingService->restoreProduct($id, $request->user()->id);
+            $product = $this->merchandisingService->restoreProduct($id, $this->requireUser($request)->id);
 
             return back()->with('success', "Produk \"{$product->title}\" berhasil dipulihkan ke etalase aktif.");
         } catch (DomainException $e) {
@@ -213,7 +210,7 @@ class SellerDashboardController extends Controller
 
             $this->merchandisingService->addProductImage(
                 productId: $id,
-                sellerId: $request->user()->id,
+                sellerId: $this->requireUser($request)->id,
                 imagePath: $imagePath,
                 altText: $validated['alt_text'] ?? null,
                 isPrimary: (bool) ($validated['is_primary'] ?? false),
@@ -228,7 +225,7 @@ class SellerDashboardController extends Controller
     public function setPrimaryProductImage(Request $request, int $id, int $imageId): RedirectResponse
     {
         try {
-            $this->merchandisingService->setPrimaryProductImage($id, $imageId, $request->user()->id);
+            $this->merchandisingService->setPrimaryProductImage($id, $imageId, $this->requireUser($request)->id);
 
             return back()->with('success', 'Foto utama produk berhasil diperbarui.');
         } catch (DomainException $e) {
@@ -239,7 +236,7 @@ class SellerDashboardController extends Controller
     public function deleteProductImage(Request $request, int $id, int $imageId): RedirectResponse
     {
         try {
-            $this->merchandisingService->deleteProductImage($id, $imageId, $request->user()->id);
+            $this->merchandisingService->deleteProductImage($id, $imageId, $this->requireUser($request)->id);
 
             return back()->with('success', 'Foto dihapus dari galeri produk.');
         } catch (DomainException $e) {
@@ -252,7 +249,7 @@ class SellerDashboardController extends Controller
         $attributes = is_array($request->input('attributes')) ? $request->input('attributes') : [];
 
         try {
-            $this->merchandisingService->syncProductAttributes($id, $request->user()->id, $attributes);
+            $this->merchandisingService->syncProductAttributes($id, $this->requireUser($request)->id, $attributes);
 
             return back()->with('success', 'Spesifikasi & atribut terindeks produk berhasil disimpan.');
         } catch (DomainException $e) {
@@ -263,7 +260,7 @@ class SellerDashboardController extends Controller
     public function bumpProduct(Request $request, int $id): RedirectResponse
     {
         try {
-            $result = $this->catalogService->bumpProduct($id, $request->user()->id);
+            $result = $this->catalogService->bumpProduct($id, $this->requireUser($request)->id);
 
             return back()->with('success', "Produk \"{$result['product']->title}\" berhasil disundul ke posisi teratas! Sisa kredit sundul: {$result['remaining_credits']}.");
         } catch (DomainException $e) {
@@ -280,7 +277,7 @@ class SellerDashboardController extends Controller
         $lines = preg_split('/\r\n|\r|\n/', $validated['vault_lines']) ?: [];
 
         try {
-            $report = $this->vaultService->bulkIngestVaultItems($id, $request->user()->id, $lines);
+            $report = $this->vaultService->bulkIngestVaultItems($id, $this->requireUser($request)->id, $lines);
 
             return back()
                 ->with('vault_ingest_report', $report)
@@ -292,7 +289,7 @@ class SellerDashboardController extends Controller
 
     public function orders(Request $request): View
     {
-        $user = $request->user()->load('sellerProfile');
+        $user = $this->requireUser($request)->load('sellerProfile');
         $statusFilter = $request->string('status')->toString();
 
         $ordersQuery = Order::with(['items.product.gameCategory.game', 'buyer', 'messages.sender', 'paymentInvoice'])
@@ -323,7 +320,7 @@ class SellerDashboardController extends Controller
         try {
             $this->orderStateService->sellerSubmitManualDelivery(
                 orderId: $order->id,
-                sellerId: $request->user()->id,
+                sellerId: $this->requireUser($request)->id,
                 deliveryNotes: $validated['delivery_notes'],
                 proofUrl: $validated['proof_url'] ?? null,
             );
@@ -337,7 +334,7 @@ class SellerDashboardController extends Controller
     public function sendMessage(Request $request, string $orderCode): RedirectResponse
     {
         $order = Order::where('order_code', $orderCode)->firstOrFail();
-        $user = $request->user();
+        $user = $this->requireUser($request);
 
         if ((int) $order->seller_id !== (int) $user->id) {
             abort(403);
@@ -362,7 +359,7 @@ class SellerDashboardController extends Controller
 
     public function wallet(Request $request): View
     {
-        $user = $request->user()->load(['wallet', 'sellerProfile']);
+        $user = $this->requireUser($request)->load(['wallet', 'sellerProfile']);
 
         $mutations = WalletMutation::with(['order', 'paymentInvoice'])
             ->where('user_id', $user->id)
@@ -404,10 +401,10 @@ class SellerDashboardController extends Controller
         ]);
 
         try {
-            $this->walletPinService->verifyPinOrFail($request->user()->id, $request->input('wallet_pin'), true);
+            $this->walletPinService->verifyPinOrFail($this->requireUser($request)->id, $request->input('wallet_pin'), true);
 
             $withdrawal = $this->orderStateService->requestWithdrawal(
-                userId: $request->user()->id,
+                userId: $this->requireUser($request)->id,
                 bankName: (string) ($validated['bank_name'] ?? ''),
                 accountNumber: (string) ($validated['account_number'] ?? ''),
                 accountHolder: (string) ($validated['account_holder'] ?? ''),
@@ -423,7 +420,7 @@ class SellerDashboardController extends Controller
 
     public function settings(Request $request): View
     {
-        $user = $request->user()->load(['sellerProfile.operatingHours']);
+        $user = $this->requireUser($request)->load(['sellerProfile.operatingHours']);
         $profile = $user->sellerProfile;
 
         $hoursMap = $profile?->operatingHours->keyBy('day_of_week') ?? collect();
@@ -471,7 +468,7 @@ class SellerDashboardController extends Controller
 
         try {
             $this->storefrontService->updateStoreSettings(
-                sellerId: $request->user()->id,
+                sellerId: $this->requireUser($request)->id,
                 profileData: $profileData,
                 operatingHours: $hours,
                 bannerFile: $request->file('store_banner_file'),
@@ -490,7 +487,7 @@ class SellerDashboardController extends Controller
         ]);
 
         try {
-            $this->storefrontService->replyToReview($request->user()->id, $reviewId, $validated['seller_reply']);
+            $this->storefrontService->replyToReview($this->requireUser($request)->id, $reviewId, $validated['seller_reply']);
 
             return back()->with('success', 'Balasan ulasan pembeli berhasil dipublikasikan.');
         } catch (AuthorizationException $e) {

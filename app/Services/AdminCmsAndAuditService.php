@@ -43,7 +43,7 @@ class AdminCmsAndAuditService
             'entity_id' => $entityId,
             'before_state' => $before,
             'after_state' => $after,
-            'ip_address' => request()?->ip(),
+            'ip_address' => request()->ip(),
             'notes' => $notes ? mb_substr(trim($notes), 0, 255) : null,
             'created_at' => now(),
         ]);
@@ -105,7 +105,7 @@ class AdminCmsAndAuditService
 
             $this->recordAudit($adminId, 'CMS_GAME_UPDATED', 'game', $game->id, $before, $game->toArray(), "Perbarui game: {$game->name}");
 
-            return $game->fresh();
+            return $game->refresh();
         });
     }
 
@@ -169,10 +169,14 @@ class AdminCmsAndAuditService
                 $category->name = trim((string) $data['name']);
             }
             if (! empty($data['delivery_method'])) {
-                $category->delivery_method = (string) $data['delivery_method'];
+                $deliveryMethod = (string) $data['delivery_method'];
+                if (! in_array($deliveryMethod, ['instant_vault', 'api_h2h', 'manual_trade'], true)) {
+                    throw new DomainException("Metode pengiriman tidak valid: [{$deliveryMethod}].");
+                }
+                $category->delivery_method = $deliveryMethod;
             }
             if (isset($data['platform_fee_percent'])) {
-                $category->platform_fee_percent = number_format((float) $data['platform_fee_percent'], 2, '.', '');
+                $category->platform_fee_percent = round((float) $data['platform_fee_percent'], 2);
             }
             if (isset($data['escrow_hold_hours'])) {
                 $category->escrow_hold_hours = max(1, (int) $data['escrow_hold_hours']);
@@ -188,7 +192,7 @@ class AdminCmsAndAuditService
 
             $this->recordAudit($adminId, 'CMS_CATEGORY_UPDATED', 'game_category', $category->id, $before, $category->toArray(), "Perbarui kategori {$category->name}");
 
-            return $category->fresh();
+            return $category->refresh();
         });
     }
 
@@ -270,9 +274,10 @@ class AdminCmsAndAuditService
         DB::transaction(function () use ($adminId, $optionId): void {
             $option = AttributeOption::where('id', $optionId)->lockForUpdate()->firstOrFail();
             $before = $option->toArray();
+            $deletedLabel = $option->label;
             $option->delete();
 
-            $this->recordAudit($adminId, 'CMS_ATTR_OPTION_DELETED', 'attribute_option', $optionId, $before, null, "Hapus opsi {$before['label']}");
+            $this->recordAudit($adminId, 'CMS_ATTR_OPTION_DELETED', 'attribute_option', $optionId, $before, null, "Hapus opsi {$deletedLabel}");
         });
     }
 
@@ -455,7 +460,7 @@ class AdminCmsAndAuditService
                         $this->notificationService->notify(
                             userId: (int) $product->seller_id,
                             category: 'moderation',
-                            title: "Produk Dinonaktifkan oleh Tim Moderasi",
+                            title: 'Produk Dinonaktifkan oleh Tim Moderasi',
                             body: "Produk \"{$product->title}\" dinonaktifkan. Catatan: {$notes}",
                             actionUrl: '/seller/products',
                             refType: 'product',
@@ -492,7 +497,7 @@ class AdminCmsAndAuditService
             }
 
             $report->resolution_notes = mb_substr(trim($notes), 0, 255);
-            $report->reviewed_by = $adminId;
+            $report->reviewed_by = max(0, $adminId);
             $report->reviewed_at = now();
             $report->save();
 
@@ -509,12 +514,11 @@ class AdminCmsAndAuditService
                 notes: $report->resolution_notes,
             );
 
-            return $report->fresh(['reporter', 'reviewer']);
+            return $report->refresh()->load(['reporter', 'reviewer']);
         });
     }
 
     /**
-     * @param  mixed  $raw
      * @return list<array<string, mixed>>
      */
     private function sanitizeCheckoutSchema(mixed $raw): array

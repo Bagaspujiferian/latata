@@ -82,7 +82,7 @@ class AccountRecoveryController extends Controller
 
         try {
             $result = $this->recoveryService->requestWalletPinReset(
-                userId: $request->user()->id,
+                userId: $this->requireUser($request)->id,
                 currentPassword: $request->filled('current_password') ? (string) $validated['current_password'] : null,
             );
 
@@ -111,7 +111,7 @@ class AccountRecoveryController extends Controller
 
         try {
             $this->recoveryService->resetWalletPinWithToken(
-                userId: $request->user()->id,
+                userId: $this->requireUser($request)->id,
                 plainToken: $validated['token'],
                 newPin: $validated['new_pin'],
             );

@@ -110,7 +110,7 @@ class OrderFulfillmentDispatcher
 
             $this->slaMetricsService->recalculateSellerSla((int) $orderRow->seller_id);
 
-            $freshOrder = Order::with(['items.product.gameCategory', 'paymentInvoice'])->findOrFail($orderRow->id);
+            $freshOrder = Order::with(['items.product.gameCategory', 'paymentInvoice'])->findOrFail((int) $orderRow->id);
             $this->warrantyService->issueWarrantyIfEligible($freshOrder);
             $this->chatModerationService->postOrderMessage(
                 order: $freshOrder,
@@ -155,7 +155,7 @@ class OrderFulfillmentDispatcher
                 'updated_at' => now(),
             ]);
 
-            $freshOrder = Order::with(['items.product', 'paymentInvoice'])->findOrFail($orderRow->id);
+            $freshOrder = Order::with(['items.product', 'paymentInvoice'])->findOrFail((int) $orderRow->id);
             $this->h2hService->dispatchTopUp($freshOrder);
 
             $this->chatModerationService->postOrderMessage(
@@ -169,13 +169,13 @@ class OrderFulfillmentDispatcher
                 userId: (int) $orderRow->seller_id,
                 category: 'order',
                 title: "Pesanan Top-Up H2H Masuk: {$freshOrder->order_code}",
-                body: "Top-up H2H didispatch ke Digiflazz. Escrow Rp ".number_format((float) $freshOrder->seller_escrow_amount, 0, ',', '.').' diamankan.',
+                body: 'Top-up H2H didispatch ke Digiflazz. Escrow Rp '.number_format((float) $freshOrder->seller_escrow_amount, 0, ',', '.').' diamankan.',
                 actionUrl: '/seller/orders',
                 refType: 'order',
                 refId: (int) $freshOrder->id,
             );
 
-            return $freshOrder->fresh(['items', 'paymentInvoice']);
+            return $freshOrder->refresh()->load(['items', 'paymentInvoice']);
         }
 
         // manual_trade
@@ -190,7 +190,7 @@ class OrderFulfillmentDispatcher
             'updated_at' => now(),
         ]);
 
-        $freshOrder = Order::with(['items', 'paymentInvoice'])->findOrFail($orderRow->id);
+        $freshOrder = Order::with(['items', 'paymentInvoice'])->findOrFail((int) $orderRow->id);
         $deadlineFormatted = $slaDeadline->format('H:i:s');
 
         $this->chatModerationService->postOrderMessage(

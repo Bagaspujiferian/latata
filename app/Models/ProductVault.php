@@ -54,11 +54,13 @@ class ProductVault extends Model
         ];
     }
 
+    /** @return BelongsTo<Product, $this> */
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
     }
 
+    /** @return BelongsTo<Order, $this> */
     public function reservedOrder(): BelongsTo
     {
         return $this->belongsTo(Order::class, 'reserved_order_id', 'id');

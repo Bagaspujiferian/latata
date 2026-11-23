@@ -6,6 +6,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property list<array<string, mixed>>|null $required_inputs_schema
+ */
 class GameCategory extends Model
 {
     /** @var list<string> */
@@ -31,16 +34,19 @@ class GameCategory extends Model
         ];
     }
 
+    /** @return BelongsTo<Game, $this> */
     public function game(): BelongsTo
     {
         return $this->belongsTo(Game::class);
     }
 
+    /** @return HasMany<Product, $this> */
     public function products(): HasMany
     {
         return $this->hasMany(Product::class);
     }
 
+    /** @return HasMany<CategoryAttribute, $this> */
     public function attributes(): HasMany
     {
         return $this->hasMany(CategoryAttribute::class)->orderBy('sort_order')->orderBy('id');

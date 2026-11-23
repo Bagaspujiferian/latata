@@ -4,6 +4,9 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @property array<int|string, mixed>|null $discrepancy_details
+ */
 class LedgerAuditSnapshot extends Model
 {
     public const UPDATED_AT = null;

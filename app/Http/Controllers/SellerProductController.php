@@ -46,7 +46,7 @@ class SellerProductController extends Controller
 
     public function create(Request $request): View
     {
-        $user = $request->user()->load('sellerProfile');
+        $user = $this->requireUser($request)->load('sellerProfile');
         $categories = GameCategory::with(['game', 'attributes.options'])
             ->orderBy('game_id')
             ->orderBy('id')
@@ -80,9 +80,9 @@ class SellerProductController extends Controller
             }
 
             $product = $this->crudService->createProduct(
-                sellerId: $request->user()->id,
+                sellerId: $this->requireUser($request)->id,
                 data: $validated,
-                uploadedImages: array_values(array_filter($uploadedImages)),
+                uploadedImages: array_values($uploadedImages),
             );
 
             return redirect()->route('seller.products')
@@ -94,11 +94,11 @@ class SellerProductController extends Controller
 
     public function edit(Request $request, Product $product): View
     {
-        if ((int) $product->seller_id !== (int) $request->user()->id) {
+        if ((int) $product->seller_id !== (int) $this->requireUser($request)->id) {
             abort(403, 'Anda tidak berwenang mengedit produk milik toko lain.');
         }
 
-        $user = $request->user()->load('sellerProfile');
+        $user = $this->requireUser($request)->load('sellerProfile');
         $product->load(['gameCategory.game', 'gameCategory.attributes.options', 'images', 'attributeValues']);
         $categories = GameCategory::with(['game', 'attributes.options'])
             ->orderBy('game_id')
@@ -110,7 +110,7 @@ class SellerProductController extends Controller
 
     public function update(Request $request, Product $product): RedirectResponse
     {
-        if ((int) $product->seller_id !== (int) $request->user()->id) {
+        if ((int) $product->seller_id !== (int) $this->requireUser($request)->id) {
             abort(403, 'Anda tidak berwenang mengubah produk milik toko lain.');
         }
 
@@ -140,11 +140,11 @@ class SellerProductController extends Controller
             }
 
             $updated = $this->crudService->updateProduct(
-                sellerId: $request->user()->id,
+                sellerId: $this->requireUser($request)->id,
                 productId: $product->id,
                 data: $validated,
-                newImages: array_values(array_filter($newImages)),
-                deleteImageIds: array_map('intval', $validated['delete_image_ids'] ?? []),
+                newImages: array_values($newImages),
+                deleteImageIds: array_values(array_map('intval', $validated['delete_image_ids'] ?? [])),
                 primaryImageId: isset($validated['primary_image_id']) ? (int) $validated['primary_image_id'] : null,
             );
 
@@ -160,7 +160,7 @@ class SellerProductController extends Controller
     public function toggleActive(Request $request, Product $product): RedirectResponse
     {
         try {
-            $updated = $this->crudService->toggleProductActive($request->user()->id, $product->id);
+            $updated = $this->crudService->toggleProductActive($this->requireUser($request)->id, $product->id);
             $label = $updated->is_active ? 'AKTIF di etalase publik' : 'NONAKTIF (disembunyikan sementara)';
 
             return back()->with('success', "Status produk \"{$updated->title}\" diubah menjadi {$label}.");
@@ -174,7 +174,7 @@ class SellerProductController extends Controller
     public function destroy(Request $request, Product $product): RedirectResponse
     {
         try {
-            $this->crudService->archiveProduct($request->user()->id, $product->id);
+            $this->crudService->archiveProduct($this->requireUser($request)->id, $product->id);
 
             return back()->with('success', 'Produk berhasil diarsipkan (soft-delete). Riwayat pesanan lama tetap utuh.');
         } catch (AuthorizationException $e) {
@@ -187,7 +187,7 @@ class SellerProductController extends Controller
     public function restore(Request $request, int $id): RedirectResponse
     {
         try {
-            $product = $this->crudService->restoreProduct($request->user()->id, $id);
+            $product = $this->crudService->restoreProduct($this->requireUser($request)->id, $id);
 
             return back()->with('success', "Produk \"{$product->title}\" berhasil dipulihkan ke etalase aktif.");
         } catch (AuthorizationException $e) {

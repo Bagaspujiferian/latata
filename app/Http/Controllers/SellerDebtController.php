@@ -24,10 +24,10 @@ class SellerDebtController extends Controller
         ]);
 
         try {
-            $this->walletPinService->verifyPinOrFail($request->user()->id, $request->input('wallet_pin'), true);
+            $this->walletPinService->verifyPinOrFail($this->requireUser($request)->id, $request->input('wallet_pin'), true);
 
             $repayment = $this->debtRecoveryService->repayDebtFromAvailableBalance(
-                sellerId: $request->user()->id,
+                sellerId: $this->requireUser($request)->id,
                 amount: (float) $validated['amount'],
             );
 
@@ -51,7 +51,7 @@ class SellerDebtController extends Controller
             $gatewayRef = 'GW-DEBT-'.now()->format('YmdHis').'-'.strtoupper(Str::random(5));
 
             $repayment = $this->debtRecoveryService->repayDebtViaGatewaySettlement(
-                sellerId: $request->user()->id,
+                sellerId: $this->requireUser($request)->id,
                 amount: (float) $validated['amount'],
                 gatewayRef: $gatewayRef,
             );

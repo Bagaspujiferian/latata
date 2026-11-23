@@ -147,7 +147,7 @@ class StorefrontEngagementService
                 );
             }
 
-            return $profile->fresh('operatingHours');
+            return $profile->refresh()->load('operatingHours');
         });
     }
 
@@ -172,7 +172,7 @@ class StorefrontEngagementService
             $review->replied_at = now();
             $review->save();
 
-            return $review->fresh();
+            return $review->refresh();
         });
     }
 

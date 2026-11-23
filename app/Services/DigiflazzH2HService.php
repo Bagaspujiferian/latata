@@ -68,7 +68,7 @@ class DigiflazzH2HService
 
         $order->loadMissing(['items.product']);
         $firstItem = $order->items->first();
-        $buyerSkuCode = $firstItem?->product?->h2h_provider_sku ?? $firstItem?->sku_snapshot ?? 'MLBB-86DM';
+        $buyerSkuCode = $firstItem?->product->h2h_provider_sku ?? $firstItem->sku_snapshot ?? 'MLBB-86DM';
         $customerNo = $this->formatCustomerNo($order->buyer_game_inputs ?? []);
 
         $requestPayload = [
@@ -132,7 +132,7 @@ class DigiflazzH2HService
     {
         $order->loadMissing(['items.product']);
         $firstItem = $order->items->first();
-        $buyerSkuCode = $firstItem?->product?->h2h_provider_sku ?? $firstItem?->sku_snapshot ?? 'MLBB-86DM';
+        $buyerSkuCode = $firstItem?->product->h2h_provider_sku ?? $firstItem->sku_snapshot ?? 'MLBB-86DM';
 
         $refId = $order->order_code;
         $username = (string) config('nexatrade.digiflazz.username');
@@ -237,7 +237,7 @@ class DigiflazzH2HService
                 'raw' => $rawPayload,
             ];
 
-            $orderModel = Order::with('items')->findOrFail($orderRow->id);
+            $orderModel = Order::with('items')->findOrFail((int) $orderRow->id);
             $sellerUser = User::findOrFail($orderModel->seller_id);
 
             if ($normalizedStatus === 'pending') {

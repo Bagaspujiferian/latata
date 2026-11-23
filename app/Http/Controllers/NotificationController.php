@@ -17,7 +17,7 @@ class NotificationController extends Controller
 
     public function index(Request $request): View
     {
-        $user = $request->user();
+        $user = $this->requireUser($request);
         $category = $request->string('category')->toString();
         $validCategories = ['order', 'escrow', 'chat', 'kyc', 'withdrawal', 'system'];
         if (! in_array($category, $validCategories, true)) {
@@ -57,7 +57,7 @@ class NotificationController extends Controller
 
     public function markRead(Request $request, int $notification): JsonResponse|RedirectResponse
     {
-        $userId = $request->user()->id;
+        $userId = $this->requireUser($request)->id;
         $record = UserNotification::where('id', $notification)
             ->where('user_id', $userId)
             ->first();
@@ -86,7 +86,7 @@ class NotificationController extends Controller
 
     public function markAllRead(Request $request): JsonResponse|RedirectResponse
     {
-        $count = $this->notificationService->markAllAsRead($request->user()->id);
+        $count = $this->notificationService->markAllAsRead($this->requireUser($request)->id);
 
         if ($request->expectsJson()) {
             return response()->json(['ok' => true, 'marked_count' => $count, 'unread_count' => 0]);

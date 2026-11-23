@@ -30,11 +30,13 @@ class Game extends Model
         ];
     }
 
+    /** @return HasMany<GameCategory, $this> */
     public function categories(): HasMany
     {
         return $this->hasMany(GameCategory::class);
     }
 
+    /** @return HasManyThrough<Product, GameCategory, $this> */
     public function products(): HasManyThrough
     {
         return $this->hasManyThrough(Product::class, GameCategory::class);

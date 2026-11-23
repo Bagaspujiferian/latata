@@ -12,6 +12,7 @@ use App\Services\MidtransWebhookService;
 use App\Services\VoucherAccountingService;
 use App\Services\WalletPinService;
 use DomainException;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -30,10 +31,10 @@ class CheckoutController extends Controller
 
     public function cart(Request $request): View
     {
-        $user = $request->user();
+        $user = $this->requireUser($request)->loadMissing('wallet');
         [$cartItems, $groupedPreview, $subtotal] = $this->buildCartBreakdown($user->id);
 
-        $walletAvailable = (float) ($user->wallet?->available_balance ?? 0);
+        $walletAvailable = (float) ($user->wallet->available_balance ?? 0);
         $gatewayFees = config('nexatrade.gateway_fees');
         $now = now();
 
@@ -80,7 +81,7 @@ class CheckoutController extends Controller
             'seller_voucher_codes' => ['nullable', 'array'],
         ]);
 
-        $user = $request->user();
+        $user = $this->requireUser($request);
         [, $groupedPreview] = $this->buildCartBreakdown($user->id);
 
         if (empty($groupedPreview)) {
@@ -135,11 +136,11 @@ class CheckoutController extends Controller
     }
 
     /**
-     * @return array{0: \Illuminate\Database\Eloquent\Collection<int, CartItem>, 1: list<array<string, mixed>>, 2: float}
+     * @return array{0: Collection<int, CartItem>, 1: list<array<string, mixed>>, 2: float}
      */
     private function buildCartBreakdown(int $userId): array
     {
-        $cartItems = CartItem::with(['product.gameCategory.game', 'product.sellerProfile'])
+        $cartItems = CartItem::with(['product.gameCategory.game', 'product.sellerProfile.operatingHours', 'product.images'])
             ->where('user_id', $userId)
             ->orderBy('id', 'asc')
             ->get();
@@ -148,12 +149,13 @@ class CheckoutController extends Controller
         $subtotal = 0.00;
 
         foreach ($cartItems as $item) {
-            if (! $item->product) {
+            $product = $item->product;
+            $category = $product?->gameCategory;
+            if (! $product || ! $category) {
                 continue;
             }
-            $product = $item->product;
-            $method = $product->gameCategory->delivery_method;
-            $feePercent = (float) $product->gameCategory->platform_fee_percent;
+            $method = $category->delivery_method;
+            $feePercent = (float) $category->platform_fee_percent;
 
             $regularUnit = (float) $product->price;
             $effectiveUnit = $regularUnit;
@@ -176,10 +178,10 @@ class CheckoutController extends Controller
             if (! isset($groupedPreview[$groupKey])) {
                 $groupedPreview[$groupKey] = [
                     'seller_id' => (int) $product->seller_id,
-                    'store_name' => $product->sellerProfile?->store_name ?? 'Toko NexaTrade',
+                    'store_name' => $product->sellerProfile->store_name ?? 'Toko NexaTrade',
                     'is_store_open' => $product->sellerProfile?->isCurrentlyOpen() ?? true,
-                    'is_suspended' => (bool) ($product->sellerProfile?->is_suspended ?? false),
-                    'is_sla_10m_badge' => $product->sellerProfile?->is_sla_10m_badge ?? false,
+                    'is_suspended' => (bool) ($product->sellerProfile->is_suspended ?? false),
+                    'is_sla_10m_badge' => $product->sellerProfile->is_sla_10m_badge ?? false,
                     'delivery_method' => $method,
                     'gross_amount' => 0.00,
                     'net_basis' => 0.00,
@@ -201,7 +203,7 @@ class CheckoutController extends Controller
 
     public function addToCart(Request $request): RedirectResponse|JsonResponse
     {
-        $user = $request->user();
+        $user = $this->requireUser($request);
         $validated = $request->validate([
             'product_id' => ['required', 'integer', 'exists:products,id'],
             'quantity' => ['required', 'integer', 'min:1', 'max:100'],
@@ -249,9 +251,13 @@ class CheckoutController extends Controller
 
                 if ($invoice->status === 'PAID') {
                     $firstOrder = $invoice->orders->first();
+                    if ($firstOrder) {
+                        return redirect()->route('buyer.orders.show', $firstOrder->order_code)
+                            ->with('success', "Beli Instan lunas 0-detik! Pesanan {$firstOrder->order_code} langsung diproses.");
+                    }
 
-                    return redirect()->route('buyer.orders.show', $firstOrder->order_code)
-                        ->with('success', "Beli Instan lunas 0-detik! Pesanan {$firstOrder->order_code} langsung diproses.");
+                    return redirect()->route('buyer.orders.index')
+                        ->with('success', 'Beli Instan lunas 0-detik! Pesanan Anda langsung diproses.');
                 }
 
                 return redirect()->route('invoices.show', $invoice->invoice_code)
@@ -275,7 +281,7 @@ class CheckoutController extends Controller
 
     public function updateCartItem(Request $request, CartItem $cartItem): RedirectResponse
     {
-        if ((int) $cartItem->user_id !== (int) $request->user()->id) {
+        if ((int) $cartItem->user_id !== (int) $this->requireUser($request)->id) {
             abort(403);
         }
 
@@ -290,7 +296,7 @@ class CheckoutController extends Controller
 
     public function removeCartItem(Request $request, CartItem $cartItem): RedirectResponse
     {
-        if ((int) $cartItem->user_id !== (int) $request->user()->id) {
+        if ((int) $cartItem->user_id !== (int) $this->requireUser($request)->id) {
             abort(403);
         }
 
@@ -301,7 +307,7 @@ class CheckoutController extends Controller
 
     public function processCheckout(Request $request): RedirectResponse|JsonResponse
     {
-        $user = $request->user();
+        $user = $this->requireUser($request);
         $validated = $request->validate([
             'payment_mode' => ['required', 'in:gateway_only,wallet_full,hybrid_wallet_gateway'],
             'payment_channel' => ['nullable', 'string', 'max:40'],
@@ -372,7 +378,7 @@ class CheckoutController extends Controller
 
     public function showInvoice(Request $request, string $invoiceCode): View
     {
-        $user = $request->user();
+        $user = $this->requireUser($request);
         $invoice = PaymentInvoice::with(['orders.items.product', 'orders.sellerProfile', 'walletMutations'])
             ->where('invoice_code', $invoiceCode)
             ->firstOrFail();
@@ -386,7 +392,7 @@ class CheckoutController extends Controller
 
     public function simulateMidtransPay(Request $request, string $invoiceCode): RedirectResponse
     {
-        $user = $request->user();
+        $user = $this->requireUser($request);
         $invoice = PaymentInvoice::where('invoice_code', $invoiceCode)->firstOrFail();
 
         if ((int) $invoice->buyer_id !== (int) $user->id && ! $user->isAdmin()) {

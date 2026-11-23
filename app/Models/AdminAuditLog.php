@@ -5,6 +5,10 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property array<string, mixed>|null $before_state
+ * @property array<string, mixed>|null $after_state
+ */
 class AdminAuditLog extends Model
 {
     public const UPDATED_AT = null;
@@ -44,6 +48,7 @@ class AdminAuditLog extends Model
         ];
     }
 
+    /** @return BelongsTo<User, $this> */
     public function admin(): BelongsTo
     {
         return $this->belongsTo(User::class, 'admin_id', 'id');

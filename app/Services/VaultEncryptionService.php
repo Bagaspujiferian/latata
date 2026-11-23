@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Exceptions\UnauthorizedVaultAccessException;
 use App\Models\Order;
 use App\Models\OrderItem;
-use App\Models\Product;
 use App\Models\ProductVault;
 use App\Models\User;
 use DomainException;
@@ -215,7 +214,7 @@ class VaultEncryptionService
             $vault->encrypted_payload = Crypt::encryptString($trimmed);
             $vault->save();
 
-            return $vault->fresh();
+            return $vault->refresh();
         });
     }
 

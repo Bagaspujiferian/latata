@@ -52,28 +52,33 @@ class SellerProfile extends Model
         ];
     }
 
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id', 'id');
     }
 
+    /** @return HasMany<Product, $this> */
     public function products(): HasMany
     {
         return $this->hasMany(Product::class, 'seller_id', 'user_id');
     }
 
+    /** @return HasMany<StoreOperatingHour, $this> */
     public function operatingHours(): HasMany
     {
         return $this->hasMany(StoreOperatingHour::class, 'seller_id', 'user_id')
             ->orderBy('day_of_week');
     }
 
+    /** @return BelongsToMany<User, $this> */
     public function followers(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'store_followers', 'seller_id', 'user_id')
             ->withPivot('created_at');
     }
 
+    /** @return HasMany<OrderReview, $this> */
     public function reviews(): HasMany
     {
         return $this->hasMany(OrderReview::class, 'seller_id', 'user_id');

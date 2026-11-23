@@ -30,11 +30,13 @@ class FlashSaleItem extends Model
         ];
     }
 
+    /** @return BelongsTo<FlashSale, $this> */
     public function flashSale(): BelongsTo
     {
         return $this->belongsTo(FlashSale::class);
     }
 
+    /** @return BelongsTo<Product, $this> */
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class)->withTrashed();

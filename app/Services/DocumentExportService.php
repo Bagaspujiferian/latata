@@ -130,7 +130,7 @@ class DocumentExportService
                 fputcsv($handle, [
                     $this->sanitizeCsvCell($order->order_code),
                     $this->sanitizeCsvCell($order->created_at?->format('Y-m-d H:i:s')),
-                    $this->sanitizeCsvCell($order->buyer?->name ?? 'Buyer #'.$order->buyer_id),
+                    $this->sanitizeCsvCell($order->buyer->name ?? 'Buyer #'.$order->buyer_id),
                     $this->sanitizeCsvCell($order->delivery_method),
                     $this->sanitizeCsvCell($order->status),
                     $this->sanitizeCsvCell($itemSummary),
@@ -186,7 +186,7 @@ class DocumentExportService
 
             foreach ($mutations as $m) {
                 fputcsv($handle, [
-                    $this->sanitizeCsvCell($m->created_at?->format('Y-m-d H:i:s')),
+                    $this->sanitizeCsvCell($m->created_at->format('Y-m-d H:i:s')),
                     $this->sanitizeCsvCell($m->reference_code),
                     $this->sanitizeCsvCell($m->mutation_type),
                     $this->sanitizeCsvCell($m->balance_bucket),

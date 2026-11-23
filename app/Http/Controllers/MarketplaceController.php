@@ -111,11 +111,11 @@ class MarketplaceController extends Controller
             ->where('slug', $slug)
             ->firstOrFail();
 
-        $vaultStats = $product->gameCategory->delivery_method === 'instant_vault'
+        $vaultStats = $product->gameCategory?->delivery_method === 'instant_vault'
             ? [
-                'available' => (int) $product->available_vaults_count,
-                'reserved' => (int) $product->reserved_vaults_count,
-                'sold' => (int) $product->sold_vaults_count,
+                'available' => (int) $product->getAttribute('available_vaults_count'),
+                'reserved' => (int) $product->getAttribute('reserved_vaults_count'),
+                'sold' => (int) $product->getAttribute('sold_vaults_count'),
             ]
             : null;
 

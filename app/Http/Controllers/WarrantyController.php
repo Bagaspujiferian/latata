@@ -23,7 +23,7 @@ class WarrantyController extends Controller
 
     public function index(Request $request): View
     {
-        $user = $request->user();
+        $user = $this->requireUser($request);
 
         $warranties = OrderWarranty::with([
             'order.items.product.gameCategory.game',
@@ -57,9 +57,9 @@ class WarrantyController extends Controller
 
             $claim = $this->warrantyService->fileWarrantyClaim(
                 orderId: $order->id,
-                buyerId: $request->user()->id,
+                buyerId: $this->requireUser($request)->id,
                 data: $validated,
-                evidenceFiles: array_values(array_filter($evidenceFiles)),
+                evidenceFiles: array_values($evidenceFiles),
             );
 
             return redirect()->route('buyer.orders.show', $order->order_code)
@@ -78,7 +78,7 @@ class WarrantyController extends Controller
             'details' => ['required', 'string', 'min:10', 'max:1500'],
         ]);
 
-        $report = $this->cmsService->submitReport($request->user()->id, $validated);
+        $report = $this->cmsService->submitReport($this->requireUser($request)->id, $validated);
 
         return back()->with('success', "Laporan moderasi #{$report->id} diterima oleh Tim Keamanan NexaTrade. Terima kasih telah menjaga ekosistem aman.");
     }

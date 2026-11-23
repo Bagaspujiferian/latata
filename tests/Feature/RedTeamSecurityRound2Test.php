@@ -558,7 +558,7 @@ class RedTeamSecurityRound2Test extends TestCase
         $this->assertStringNotContainsString("<script>alert('xss')</script>", $html);
         $this->assertStringNotContainsString("<script>alert('desc-xss')</script>", $html);
         $this->assertStringNotContainsString("<script>alert('review-xss')</script>", $html);
-        $this->assertStringContainsString("&lt;script&gt;alert(&#039;xss&#039;)&lt;/script&gt;", $html);
-        $this->assertStringContainsString("&lt;script&gt;alert(&#039;review-xss&#039;)&lt;/script&gt;", $html);
+        $this->assertStringContainsString('&lt;script&gt;alert(&#039;xss&#039;)&lt;/script&gt;', $html);
+        $this->assertStringContainsString('&lt;script&gt;alert(&#039;review-xss&#039;)&lt;/script&gt;', $html);
     }
 }

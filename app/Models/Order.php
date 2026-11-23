@@ -6,7 +6,17 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property array<string, mixed>|null $buyer_game_inputs
+ * @property array<string, mixed>|null $seller_delivery_proof
+ * @property array<string, mixed>|null $h2h_response_log
+ * @property Carbon|null $sla_deadline_at
+ * @property Carbon|null $delivered_at
+ * @property Carbon|null $auto_complete_at
+ * @property Carbon|null $completed_at
+ */
 class Order extends Model
 {
     /** @var list<string> */
@@ -63,51 +73,61 @@ class Order extends Model
         ];
     }
 
+    /** @return BelongsTo<PaymentInvoice, $this> */
     public function paymentInvoice(): BelongsTo
     {
         return $this->belongsTo(PaymentInvoice::class, 'payment_invoice_id', 'id');
     }
 
+    /** @return BelongsTo<User, $this> */
     public function buyer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'buyer_id', 'id');
     }
 
+    /** @return BelongsTo<User, $this> */
     public function seller(): BelongsTo
     {
         return $this->belongsTo(User::class, 'seller_id', 'id');
     }
 
+    /** @return BelongsTo<SellerProfile, $this> */
     public function sellerProfile(): BelongsTo
     {
         return $this->belongsTo(SellerProfile::class, 'seller_id', 'user_id');
     }
 
+    /** @return HasMany<OrderItem, $this> */
     public function items(): HasMany
     {
         return $this->hasMany(OrderItem::class);
     }
 
+    /** @return HasMany<DisputeMessage, $this> */
     public function messages(): HasMany
     {
         return $this->hasMany(DisputeMessage::class)->orderBy('id');
     }
 
+    /** @return HasOne<OrderReview, $this> */
     public function review(): HasOne
     {
         return $this->hasOne(OrderReview::class);
     }
 
+    /** @return HasMany<WalletMutation, $this> */
     public function walletMutations(): HasMany
     {
         return $this->hasMany(WalletMutation::class);
     }
 
+    /** @return HasOne<OrderWarranty, $this> */
     public function warranty(): HasOne
     {
         return $this->hasOne(OrderWarranty::class);
     }
 
+    /** @return HasMany<WarrantyClaim, $this> */
     public function warrantyClaims(): HasMany
     {
         return $this->hasMany(WarrantyClaim::class)->orderByDesc('id');

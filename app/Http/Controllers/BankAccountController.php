@@ -19,7 +19,7 @@ class BankAccountController extends Controller
 
     public function index(Request $request): View
     {
-        $user = $request->user()->load('sellerProfile');
+        $user = $this->requireUser($request)->load('sellerProfile');
 
         $accounts = UserBankAccount::where('user_id', $user->id)
             ->orderByDesc('is_primary')
@@ -53,7 +53,7 @@ class BankAccountController extends Controller
         ]);
 
         try {
-            $account = $this->bankAccountService->addBankAccount($request->user()->id, [
+            $account = $this->bankAccountService->addBankAccount($this->requireUser($request)->id, [
                 'bank_code' => $validated['bank_code'],
                 'bank_name' => UserBankAccount::SUPPORTED_BANKS[$validated['bank_code']] ?? $validated['bank_code'],
                 'account_number' => $validated['account_number'],
@@ -70,7 +70,7 @@ class BankAccountController extends Controller
     public function setPrimary(Request $request, int $id): RedirectResponse
     {
         try {
-            $account = $this->bankAccountService->setPrimary($request->user()->id, $id);
+            $account = $this->bankAccountService->setPrimary($this->requireUser($request)->id, $id);
 
             return back()->with('success', "Rekening {$account->bank_name} ({$account->account_number}) kini menjadi rekening utama.");
         } catch (DomainException $e) {
@@ -81,7 +81,7 @@ class BankAccountController extends Controller
     public function destroy(Request $request, int $id): RedirectResponse
     {
         try {
-            $this->bankAccountService->deleteBankAccount($request->user()->id, $id);
+            $this->bankAccountService->deleteBankAccount($this->requireUser($request)->id, $id);
 
             return back()->with('success', 'Rekening berhasil dihapus dari daftar tersimpan.');
         } catch (DomainException $e) {

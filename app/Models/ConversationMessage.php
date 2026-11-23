@@ -34,21 +34,25 @@ class ConversationMessage extends Model
         ];
     }
 
+    /** @return BelongsTo<Conversation, $this> */
     public function conversation(): BelongsTo
     {
         return $this->belongsTo(Conversation::class);
     }
 
+    /** @return BelongsTo<User, $this> */
     public function sender(): BelongsTo
     {
         return $this->belongsTo(User::class, 'sender_id', 'id');
     }
 
+    /** @return BelongsTo<Product, $this> */
     public function attachedProduct(): BelongsTo
     {
         return $this->belongsTo(Product::class, 'attached_product_id', 'id')->withTrashed();
     }
 
+    /** @return BelongsTo<Order, $this> */
     public function attachedOrder(): BelongsTo
     {
         return $this->belongsTo(Order::class, 'attached_order_id', 'id');
