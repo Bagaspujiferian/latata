@@ -97,7 +97,7 @@ jobs:
           DB_DATABASE: db_latata_test
           DB_USERNAME: root
           DB_PASSWORD: ci_root_password
-        run: php artisan test --no-interaction
+        run: php artisan test
 
       - name: Gate 4 — Fresh Migration, Seeder & Global Ledger Reconciliation Audit
         env:
