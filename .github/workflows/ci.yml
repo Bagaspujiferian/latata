@@ -1,0 +1,126 @@
+name: NexaTrade Enterprise CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-and-tests:
+    name: Quality Gates & MySQL 8.4 Test Suite
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci_root_password
+          MYSQL_DATABASE: db_latata_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci_root_password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: db_latata_test
+      DB_USERNAME: root
+      DB_PASSWORD: ci_root_password
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql, mbstring, bcmath, gd, xml, dom, intl, curl, zip
+          coverage: none
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Get Composer Cache Directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Composer Dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+
+      - name: Install Composer Dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Install NPM Dependencies & Build Vite Assets
+        run: npm ci && npm run build
+
+      - name: Prepare CI Environment (.env)
+        run: |
+          cp .env.example .env
+          sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=mysql/' .env
+          sed -i 's/^# DB_HOST=.*/DB_HOST=127.0.0.1/' .env
+          sed -i 's/^# DB_PORT=.*/DB_PORT=3306/' .env
+          sed -i 's/^# DB_DATABASE=.*/DB_DATABASE=db_latata_test/' .env
+          sed -i 's/^# DB_USERNAME=.*/DB_USERNAME=root/' .env
+          sed -i 's/^# DB_PASSWORD=.*/DB_PASSWORD=ci_root_password/' .env
+          php artisan key:generate --ansi
+
+      - name: Gate 1 — Code Style (Laravel Pint)
+        run: vendor/bin/pint --test
+
+      - name: Gate 2 — Static Analysis Level 8 (Larastan / PHPStan)
+        run: vendor/bin/phpstan analyse --memory-limit=1G
+
+      - name: Gate 3 — Full Test Suite (MySQL 8.4 InnoDB)
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: db_latata_test
+          DB_USERNAME: root
+          DB_PASSWORD: ci_root_password
+        run: php artisan test --no-interaction
+
+      - name: Gate 4 — Fresh Migration, Seeder & Global Ledger Reconciliation Audit
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: db_latata_test
+          DB_USERNAME: root
+          DB_PASSWORD: ci_root_password
+        run: |
+          php artisan migrate:fresh --seed --force
+          php artisan nexatrade:audit-ledger
+
+  docker-build-check:
+    name: Production Docker Build & Compose Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Validate Docker Compose Configuration
+        run: docker compose config --quiet
+
+      - name: Build Production Multi-Stage Image (Target app)
+        run: docker build --target app -t latata:ci-check .

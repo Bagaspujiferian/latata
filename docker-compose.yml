@@ -1,0 +1,164 @@
+x-app-env: &app-env
+  APP_NAME: ${APP_NAME:-NexaTrade}
+  APP_ENV: ${APP_ENV:-production}
+  APP_KEY: ${APP_KEY:-}
+  APP_DEBUG: ${APP_DEBUG:-false}
+  APP_URL: ${APP_URL:-http://localhost:8080}
+  LOG_CHANNEL: ${LOG_CHANNEL:-stack}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DB_CONNECTION: mysql
+  DB_HOST: ${DB_HOST:-mysql}
+  DB_PORT: ${DB_PORT:-3306}
+  DB_DATABASE: ${DB_DATABASE:-db_latata}
+  DB_USERNAME: ${DB_USERNAME:-nexatrade}
+  DB_PASSWORD: ${DB_PASSWORD:-change_me_db_password}
+  REDIS_CLIENT: phpredis
+  REDIS_HOST: ${REDIS_HOST:-redis}
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-null}
+  REDIS_PORT: ${REDIS_PORT:-6379}
+  CACHE_STORE: ${CACHE_STORE:-redis}
+  SESSION_DRIVER: ${SESSION_DRIVER:-redis}
+  QUEUE_CONNECTION: ${QUEUE_CONNECTION:-redis}
+  NEXATRADE_DEMO_SWITCHER: ${NEXATRADE_DEMO_SWITCHER:-false}
+  NEXATRADE_PAYMENT_DRIVER: ${NEXATRADE_PAYMENT_DRIVER:-midtrans_sandbox}
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: app
+    image: nexatrade-app:latest
+    container_name: latata-app
+    restart: unless-stopped
+    env_file:
+      - path: .env.docker
+        required: false
+    environment:
+      <<: *app-env
+    volumes:
+      - latata_storage_data:/var/www/html/storage
+      - latata_public_build:/var/www/html/public/build
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - latata_net
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: latata-nginx
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:80"
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./public:/var/www/html/public:ro
+      - latata_public_build:/var/www/html/public/build:ro
+    depends_on:
+      - app
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/up || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - latata_net
+
+  mysql:
+    image: mysql:8.4
+    container_name: latata-mysql
+    restart: unless-stopped
+    command:
+      - --innodb-ft-min-token-size=3
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-db_latata}
+      MYSQL_USER: ${DB_USERNAME:-nexatrade}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-change_me_db_password}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-change_me_root_password}
+    volumes:
+      - latata_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$$MYSQL_USER -p$$MYSQL_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - latata_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: latata-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - latata_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - latata_net
+
+  queue:
+    image: nexatrade-app:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: app
+    container_name: latata-queue
+    restart: unless-stopped
+    command: ["php", "artisan", "queue:work", "redis", "--sleep=3", "--tries=3", "--max-time=3600"]
+    env_file:
+      - path: .env.docker
+        required: false
+    environment:
+      <<: *app-env
+    volumes:
+      - latata_storage_data:/var/www/html/storage
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - latata_net
+
+  scheduler:
+    image: nexatrade-app:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: app
+    container_name: latata-scheduler
+    restart: unless-stopped
+    command: ["php", "artisan", "schedule:work"]
+    env_file:
+      - path: .env.docker
+        required: false
+    environment:
+      <<: *app-env
+    volumes:
+      - latata_storage_data:/var/www/html/storage
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - latata_net
+
+volumes:
+  latata_mysql_data:
+  latata_redis_data:
+  latata_storage_data:
+  latata_public_build:
+
+networks:
+  latata_net:
+    driver: bridge
