@@ -4,7 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property string $status
+ * @property Carbon|null $processed_at
+ */
 class WithdrawalRequest extends Model
 {
     /** @var list<string> */
@@ -51,5 +57,11 @@ class WithdrawalRequest extends Model
     public function bankAccount(): BelongsTo
     {
         return $this->belongsTo(UserBankAccount::class, 'user_bank_account_id', 'id')->withTrashed();
+    }
+
+    /** @return HasMany<WithdrawalApproval, $this> */
+    public function approvals(): HasMany
+    {
+        return $this->hasMany(WithdrawalApproval::class, 'withdrawal_id', 'id')->orderBy('id', 'asc');
     }
 }

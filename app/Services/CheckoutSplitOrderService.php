@@ -9,11 +9,13 @@ use App\Exceptions\PriceChangedException;
 use App\Exceptions\SelfDealingException;
 use App\Exceptions\StoreClosedException;
 use App\Exceptions\TooManyUnpaidInvoicesException;
+use App\Exceptions\UnverifiedAccountPromoException;
 use App\Models\CartItem;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PaymentInvoice;
 use App\Models\Product;
+use App\Models\User;
 use App\Support\StateTransitionGuard;
 use DomainException;
 use Illuminate\Support\Facades\DB;
@@ -286,6 +288,16 @@ class CheckoutSplitOrderService
 
             $subtotalAmount = round($subtotalAmount, 2);
 
+            // Anti-Bot Tuyul Guard: require verified Email AND Phone before claiming Flash Sale or Platform Voucher
+            if ($hasFlashSaleItem || ($platformVoucherCode !== null && trim($platformVoucherCode) !== '')) {
+                $buyerUser = User::findOrFail($buyerId);
+                if (! $buyerUser->isFullyVerifiedForPromo()) {
+                    throw new UnverifiedAccountPromoException(
+                        'Akun Anda wajib terverifikasi Email dan Nomor Telepon (OTP) terlebih dahulu untuk menggunakan Voucher Platform atau membeli produk Flash Sale.'
+                    );
+                }
+            }
+
             // Apply Seller & Platform Vouchers atomically with ascending voucher row locks & Anti-Farming subsidy accounting.
             $voucherResult = $this->voucherService->reserveVouchersForCheckout(
                 buyerId: $buyerId,
@@ -297,6 +309,15 @@ class CheckoutSplitOrderService
             $sellerDiscountTotal = $voucherResult['seller_discount_total'];
             $platformDiscountTotal = $voucherResult['platform_discount_total'];
             $usagesToCreate = $voucherResult['usages_to_create'];
+
+            if ($platformDiscountTotal > 0) {
+                $buyerUser = isset($buyerUser) ? $buyerUser : User::findOrFail($buyerId);
+                if (! $buyerUser->isFullyVerifiedForPromo()) {
+                    throw new UnverifiedAccountPromoException(
+                        'Akun Anda wajib terverifikasi Email dan Nomor Telepon (OTP) terlebih dahulu untuk menikmati subsidi Voucher Platform.'
+                    );
+                }
+            }
 
             $buyerPayableSubtotal = round(max(0.0, $subtotalAmount - $sellerDiscountTotal - $platformDiscountTotal), 2);
 

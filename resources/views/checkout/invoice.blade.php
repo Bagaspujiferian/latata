@@ -67,7 +67,73 @@
                     </div>
                 </div>
 
-                {{-- Midtrans Snap Simulator Panel (Hidden in Production) --}}
+                {{-- Midtrans Live/Sandbox Snap Payment Panel & Simulator Panel --}}
+                @php
+                    $isLiveSnapDriver = in_array(config('nexatrade.midtrans.payment_driver', 'simulation'), ['midtrans_sandbox', 'midtrans_production'], true);
+                @endphp
+
+                @if($invoice->status === 'UNPAID' && (float) $invoice->grand_total > 0 && $isLiveSnapDriver)
+                    <script src="{{ config('nexatrade.midtrans.snap_js_url') }}" data-client-key="{{ config('nexatrade.midtrans.client_key') }}"></script>
+                    <div class="p-4 rounded-xl bg-[#EFF6FF] border border-[#BFDBFE] space-y-3"
+                         x-data="{
+                             snapLoading: false,
+                             snapError: '',
+                             async payWithSnap() {
+                                 this.snapLoading = true;
+                                 this.snapError = '';
+                                 try {
+                                     const res = await fetch('{{ route('invoices.snap-token', $invoice->invoice_code) }}', {
+                                         method: 'POST',
+                                         headers: {
+                                             'Content-Type': 'application/json',
+                                             'Accept': 'application/json',
+                                             'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                                         }
+                                     });
+                                     const data = await res.json();
+                                     if (!res.ok || !data.ok) {
+                                         this.snapError = data.message || 'Gagal memuat token Midtrans Snap.';
+                                         this.snapLoading = false;
+                                         return;
+                                     }
+                                     if (window.snap && typeof window.snap.pay === 'function') {
+                                         window.snap.pay(data.snap_token, {
+                                             onSuccess: () => { this.$refs.syncForm.submit(); },
+                                             onPending: () => { this.$refs.syncForm.submit(); },
+                                             onError: () => { this.snapError = 'Pembayaran Midtrans gagal atau dibatalkan.'; this.snapLoading = false; },
+                                             onClose: () => { this.snapLoading = false; }
+                                         });
+                                     } else if (data.redirect_url) {
+                                         window.location.href = data.redirect_url;
+                                     }
+                                 } catch (e) {
+                                     this.snapError = 'Terjadi gangguan jaringan saat menghubungi Midtrans Snap.';
+                                     this.snapLoading = false;
+                                 }
+                             }
+                         }">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div>
+                                <div class="text-xs font-extrabold text-[#111827]">Pembayaran Resmi Midtrans Snap ({{ strtoupper($invoice->payment_channel) }})</div>
+                                <p class="text-[11px] text-[#374151] mt-0.5">Klik tombol di samping untuk membuka popup resmi Midtrans Snap (QRIS, Virtual Account, GoPay), atau sinkronkan status pembayaran Anda.</p>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2 shrink-0">
+                                <button type="button" @click="payWithSnap()" :disabled="snapLoading"
+                                        class="btn-tactile px-4 py-2.5 rounded-lg bg-[#0068E1] hover:bg-[#0055B8] text-white text-xs font-bold inline-flex items-center gap-2 cursor-pointer disabled:opacity-65">
+                                    <span x-text="snapLoading ? 'Memuat Midtrans Snap...' : 'Bayar Sekarang via Midtrans Snap'"></span>
+                                </button>
+                                <form x-ref="syncForm" method="POST" action="{{ route('invoices.sync-status', $invoice->invoice_code) }}">
+                                    @csrf
+                                    <button type="submit" class="btn-tactile px-3.5 py-2.5 rounded-lg bg-white hover:bg-[#F8FAFC] border border-[#0068E1] text-[#0068E1] text-xs font-bold cursor-pointer">
+                                        Sinkronkan Status Pembayaran
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                        <div x-show="snapError" x-cloak class="p-2.5 rounded-lg bg-[#FEF2F2] border border-[#FECACA] text-[#B91C1C] text-xs font-semibold" x-text="snapError"></div>
+                    </div>
+                @endif
+
                 @if(in_array($invoice->status, ['UNPAID', 'EXPIRED'], true))
                     @if(config('nexatrade.demo_switcher_enabled'))
                         <div class="p-4 rounded-xl bg-[#F8FAFC] border border-[#E4E8EE] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -93,7 +159,7 @@
                                 </button>
                             </form>
                         </div>
-                    @else
+                    @elseif(! $isLiveSnapDriver)
                         <div class="p-4 rounded-xl bg-[#EFF6FF] border border-[#BFDBFE] text-xs text-[#1E40AF]">
                             Selesaikan pembayaran melalui kanal <strong class="uppercase">{{ $invoice->payment_channel }}</strong> sebelum batas waktu berakhir. Status tagihan diperbarui otomatis melalui webhook terverifikasi SHA-512.
                         </div>

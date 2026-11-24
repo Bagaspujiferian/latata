@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\RejectWithdrawalRequest;
 use App\Models\Order;
 use App\Models\PaymentWebhookLog;
 use App\Models\Wallet;
@@ -10,6 +11,7 @@ use App\Models\WithdrawalRequest;
 use App\Services\ChaosLabRunnerService;
 use App\Services\ChatModerationService;
 use App\Services\OrderStateAndSlaService;
+use App\Services\WithdrawalApprovalService;
 use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
@@ -23,6 +25,7 @@ class AdminChaosLabController extends Controller
         private readonly OrderStateAndSlaService $orderStateService,
         private readonly ChatModerationService $chatModerationService,
         private readonly ChaosLabRunnerService $chaosLabService,
+        private readonly WithdrawalApprovalService $withdrawalApprovalService,
     ) {}
 
     public function disputes(): View
@@ -102,18 +105,28 @@ class AdminChaosLabController extends Controller
 
     public function withdrawals(): View
     {
-        $withdrawals = WithdrawalRequest::with(['user.sellerProfile', 'user.wallet', 'processor'])
-            ->orderByRaw("CASE WHEN status = 'PENDING' THEN 0 ELSE 1 END")
+        $withdrawals = WithdrawalRequest::with(['user.sellerProfile', 'user.wallet', 'processor', 'approvals.admin'])
+            ->orderByRaw("CASE WHEN status IN ('PENDING', 'MAKER_APPROVED') THEN 0 ELSE 1 END")
             ->orderByDesc('id')
             ->get();
 
-        return view('admin.withdrawals', compact('withdrawals'));
+        $makerCheckerThreshold = $this->withdrawalApprovalService->getMakerCheckerThreshold();
+
+        return view('admin.withdrawals', compact('withdrawals', 'makerCheckerThreshold'));
     }
 
     public function approveWithdrawal(Request $request, int $id): RedirectResponse
     {
         try {
-            $wd = $this->orderStateService->approveWithdrawal($id, $this->requireUser($request)->id);
+            $notes = $request->filled('notes') ? mb_substr(trim((string) $request->input('notes')), 0, 255) : null;
+            $wd = $this->withdrawalApprovalService->approve($id, $this->requireUser($request)->id, $notes);
+
+            if ($wd->status === 'MAKER_APPROVED') {
+                return back()->with(
+                    'success',
+                    "Penarikan {$wd->withdraw_code} disetujui Tahap 1 (Maker). Menunggu persetujuan Tahap 2 (Checker) dari Admin Finance/Super Admin berbeda."
+                );
+            }
 
             return back()->with('success', "Penarikan {$wd->withdraw_code} disetujui & ditandai PAID (Rp ".number_format((float) $wd->net_payout, 0, ',', '.').').');
         } catch (AuthorizationException $e) {
@@ -123,14 +136,14 @@ class AdminChaosLabController extends Controller
         }
     }
 
-    public function rejectWithdrawal(Request $request, int $id): RedirectResponse
+    public function rejectWithdrawal(RejectWithdrawalRequest $request, int $id): RedirectResponse
     {
-        $validated = $request->validate([
-            'rejection_reason' => ['required', 'string', 'min:5', 'max:255'],
-        ]);
-
         try {
-            $wd = $this->orderStateService->rejectWithdrawal($id, $this->requireUser($request)->id, $validated['rejection_reason']);
+            $wd = $this->withdrawalApprovalService->reject(
+                $id,
+                $this->requireUser($request)->id,
+                (string) $request->validated('rejection_reason'),
+            );
 
             return back()->with('success', "Penarikan {$wd->withdraw_code} ditolak. Saldo Rp ".number_format((float) $wd->amount, 0, ',', '.').' otomatis dikembalikan via WITHDRAW_REJECT_REFUND.');
         } catch (AuthorizationException $e) {

@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Exceptions\BankNameMismatchException;
 use App\Exceptions\DuplicateBankAccountException;
+use App\Models\SellerKycVerification;
 use App\Models\UserBankAccount;
 use App\Models\WithdrawalRequest;
 use DomainException;
@@ -10,6 +12,10 @@ use Illuminate\Support\Facades\DB;
 
 class BankAccountService
 {
+    public function __construct(
+        private readonly IndonesianNameMatcher $nameMatcher = new IndonesianNameMatcher,
+    ) {}
+
     public function computeBankAccountBlindHash(string $bankCode, string $sanitizedAccountNumber): string
     {
         $canonical = strtoupper(trim($bankCode)).':'.trim($sanitizedAccountNumber);
@@ -40,6 +46,19 @@ class BankAccountService
         $blindHash = $this->computeBankAccountBlindHash($bankCode, $accountNumber);
 
         return DB::transaction(function () use ($userId, $bankCode, $bankName, $accountNumber, $holderName, $blindHash, $data): UserBankAccount {
+            // KYC Legal Name == Bank Account Holder Name Lock (Anti-Money Mule)
+            $approvedKyc = SellerKycVerification::where('user_id', $userId)
+                ->whereIn('status', ['approved', 'APPROVED'])
+                ->orderByDesc('id')
+                ->lockForUpdate()
+                ->first();
+
+            if ($approvedKyc !== null && ! $this->nameMatcher->matches((string) $approvedKyc->full_legal_name, $holderName)) {
+                throw new BankNameMismatchException(
+                    "Nama pemilik rekening bank ({$holderName}) wajib sesuai dengan nama legal KTP pada KYC yang telah disetujui ({$approvedKyc->full_legal_name})."
+                );
+            }
+
             // Anti-Tuyul Cross-User Blind Hash Lock Check
             $activeCollision = UserBankAccount::where('active_account_lock_hash', $blindHash)
                 ->lockForUpdate()

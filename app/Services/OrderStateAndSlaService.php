@@ -747,99 +747,14 @@ class OrderStateAndSlaService
         });
     }
 
-    public function approveWithdrawal(int $withdrawalId, int $adminId): WithdrawalRequest
+    public function approveWithdrawal(int $withdrawalId, int $adminId, ?string $notes = null): WithdrawalRequest
     {
-        return DB::transaction(function () use ($withdrawalId, $adminId): WithdrawalRequest {
-            $admin = User::findOrFail($adminId);
-            if (! $admin->isAdmin()) {
-                throw new DomainException('Hanya Admin yang dapat menyetujui penarikan saldo.');
-            }
-
-            $row = DB::table('withdrawal_requests')->where('id', $withdrawalId)->lockForUpdate()->first();
-            if (! $row) {
-                throw new DomainException("Permintaan penarikan #{$withdrawalId} tidak ditemukan.");
-            }
-
-            if ((int) $row->user_id === $adminId) {
-                throw new AuthorizationException('Conflict of Interest: Admin dilarang menyetujui penarikan saldo miliknya sendiri.');
-            }
-
-            if ($row->status !== 'PENDING') {
-                throw new DomainException("Penarikan {$row->withdraw_code} sudah diproses sebelumnya (status: {$row->status}).");
-            }
-
-            DB::table('withdrawal_requests')->where('id', $withdrawalId)->update([
-                'status' => 'APPROVED_PAID',
-                'processed_by' => $adminId,
-                'processed_at' => now(),
-                'updated_at' => now(),
-            ]);
-
-            $withdrawal = WithdrawalRequest::findOrFail($withdrawalId);
-
-            $this->notificationService->notify(
-                userId: (int) $withdrawal->user_id,
-                category: 'withdrawal',
-                title: "Penarikan {$withdrawal->withdraw_code} Disetujui",
-                body: 'Dana bersih Rp '.number_format((float) $withdrawal->net_payout, 0, ',', '.')." telah ditransfer ke {$withdrawal->bank_name} ({$withdrawal->account_number}).",
-                actionUrl: '/seller/wallet',
-                refType: 'withdrawal',
-                refId: (int) $withdrawal->id,
-            );
-
-            return $withdrawal;
-        });
+        return app(WithdrawalApprovalService::class)->approve($withdrawalId, $adminId, $notes);
     }
 
     public function rejectWithdrawal(int $withdrawalId, int $adminId, string $reason): WithdrawalRequest
     {
-        return DB::transaction(function () use ($withdrawalId, $adminId, $reason): WithdrawalRequest {
-            $admin = User::findOrFail($adminId);
-            if (! $admin->isAdmin()) {
-                throw new DomainException('Hanya Admin yang dapat menolak penarikan saldo.');
-            }
-
-            $row = DB::table('withdrawal_requests')->where('id', $withdrawalId)->lockForUpdate()->first();
-            if (! $row) {
-                throw new DomainException("Permintaan penarikan #{$withdrawalId} tidak ditemukan.");
-            }
-
-            if ((int) $row->user_id === $adminId) {
-                throw new AuthorizationException('Conflict of Interest: Admin dilarang menyetujui penarikan saldo miliknya sendiri.');
-            }
-
-            if ($row->status !== 'PENDING') {
-                throw new DomainException("Penarikan {$row->withdraw_code} sudah diproses sebelumnya (status: {$row->status}).");
-            }
-
-            DB::table('withdrawal_requests')->where('id', $withdrawalId)->update([
-                'status' => 'REJECTED_REFUNDED',
-                'processed_by' => $adminId,
-                'rejection_reason' => mb_substr(trim($reason), 0, 255),
-                'processed_at' => now(),
-                'updated_at' => now(),
-            ]);
-
-            $this->ledgerService->refundRejectedWithdrawal(
-                userId: (int) $row->user_id,
-                amount: (float) $row->amount,
-                withdrawCode: $row->withdraw_code,
-            );
-
-            $withdrawal = WithdrawalRequest::findOrFail($withdrawalId);
-
-            $this->notificationService->notify(
-                userId: (int) $withdrawal->user_id,
-                category: 'withdrawal',
-                title: "Penarikan {$withdrawal->withdraw_code} Ditolak & Dikembalikan",
-                body: "Alasan: {$withdrawal->rejection_reason}. Saldo Rp ".number_format((float) $withdrawal->amount, 0, ',', '.').' dikembalikan ke Saldo Aktif.',
-                actionUrl: '/seller/wallet',
-                refType: 'withdrawal',
-                refId: (int) $withdrawal->id,
-            );
-
-            return $withdrawal;
-        });
+        return app(WithdrawalApprovalService::class)->reject($withdrawalId, $adminId, $reason);
     }
 
     private function finalizeCompletedOrderWithinLock(int $orderId, int $sellerId, string $note): Order

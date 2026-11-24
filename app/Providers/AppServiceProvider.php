@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -31,6 +32,10 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Model::preventLazyLoading(! app()->isProduction());
+
+        if (request()->header('X-Forwarded-Proto') === 'https') {
+            URL::forceScheme('https');
+        }
 
         $this->configureRateLimiters();
 
@@ -116,7 +121,7 @@ class AppServiceProvider extends ServiceProvider
             $data = $view->getData();
             $view->with([
                 'openDisputes' => $data['openDisputes'] ?? Order::where('status', 'DISPUTED')->count(),
-                'pendingWithdrawals' => $data['pendingWithdrawals'] ?? WithdrawalRequest::where('status', 'PENDING')->count(),
+                'pendingWithdrawals' => $data['pendingWithdrawals'] ?? WithdrawalRequest::whereIn('status', ['PENDING', 'MAKER_APPROVED'])->count(),
                 'pendingKycs' => $data['pendingKycs'] ?? (Schema::hasTable('seller_kyc_verifications') ? SellerKycVerification::where('status', 'pending')->count() : 0),
                 'openWarrantyClaims' => $data['openWarrantyClaims'] ?? (Schema::hasTable('warranty_claims') ? WarrantyClaim::whereIn('status', ['open', 'investigating'])->count() : 0),
                 'openReports' => $data['openReports'] ?? (Schema::hasTable('moderation_reports') ? ModerationReport::where('status', 'open')->count() : 0),
@@ -166,6 +171,12 @@ class AppServiceProvider extends ServiceProvider
             $key = $request->user()?->id ? 'u:'.$request->user()->id : 'ip:'.$request->ip();
 
             return Limit::perMinutes(15, 3)->by($key);
+        });
+
+        RateLimiter::for('verification-otp', function (Request $request): Limit {
+            $key = $request->user()?->id ? 'u:'.$request->user()->id : 'ip:'.$request->ip();
+
+            return Limit::perMinutes(10, 3)->by($key);
         });
     }
 }

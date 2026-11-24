@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\Voucher;
 use App\Services\CheckoutSplitOrderService;
 use App\Services\FlashSaleService;
+use App\Services\MidtransSnapGatewayService;
 use App\Services\MidtransWebhookService;
 use App\Services\VoucherAccountingService;
 use App\Services\WalletPinService;
@@ -27,6 +28,7 @@ class CheckoutController extends Controller
         private readonly VoucherAccountingService $voucherService,
         private readonly FlashSaleService $flashSaleService,
         private readonly WalletPinService $walletPinService,
+        private readonly MidtransSnapGatewayService $snapGatewayService,
     ) {}
 
     public function cart(Request $request): View
@@ -429,5 +431,81 @@ class CheckoutController extends Controller
 
         return redirect()->route('buyer.orders.index')
             ->with('success', 'Webhook Midtrans SHA-512 terverifikasi! Semua Split-Order berhasil didispatch.');
+    }
+
+    public function issueSnapToken(Request $request, string $invoiceCode): JsonResponse
+    {
+        $user = $this->requireUser($request);
+        $invoice = PaymentInvoice::where('invoice_code', $invoiceCode)->firstOrFail();
+
+        if ((int) $invoice->buyer_id !== (int) $user->id && ! $user->isAdmin()) {
+            abort(403, 'Anda tidak memiliki akses ke tagihan ini.');
+        }
+
+        try {
+            $tokenData = $this->snapGatewayService->createOrReuseInvoiceSnapToken($invoice);
+
+            return response()->json([
+                'ok' => true,
+                'invoice_code' => $invoice->invoice_code,
+                'snap_token' => $tokenData['snap_token'],
+                'redirect_url' => $tokenData['redirect_url'],
+            ]);
+        } catch (DomainException $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    public function syncPaymentStatus(Request $request, string $invoiceCode): RedirectResponse|JsonResponse
+    {
+        $user = $this->requireUser($request);
+        $invoice = PaymentInvoice::where('invoice_code', $invoiceCode)->firstOrFail();
+
+        if ((int) $invoice->buyer_id !== (int) $user->id && ! $user->isAdmin()) {
+            abort(403, 'Anda tidak memiliki akses ke tagihan ini.');
+        }
+
+        try {
+            $result = $this->snapGatewayService->syncTransactionStatus(
+                $invoice->invoice_code,
+                (float) $invoice->grand_total,
+            );
+            $invoice->refresh();
+
+            $httpOk = ($result['http_status'] ?? 500) === 200;
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => $httpOk,
+                    'invoice_code' => $invoice->invoice_code,
+                    'invoice_status' => $invoice->status,
+                    'result' => $result,
+                ], $httpOk ? 200 : 422);
+            }
+
+            if (! $httpOk) {
+                return back()->with('error', (string) ($result['message'] ?? 'Sinkronisasi status Midtrans gagal.'));
+            }
+
+            if ($invoice->status === 'PAID') {
+                return redirect()->route('invoices.show', $invoice->invoice_code)
+                    ->with('success', "Status Midtrans disinkronkan: Tagihan {$invoice->invoice_code} LUNAS & seluruh pesanan telah didispatch.");
+            }
+
+            return redirect()->route('invoices.show', $invoice->invoice_code)
+                ->with('success', "Status Midtrans disinkronkan: Status tagihan saat ini [{$invoice->status}].");
+        } catch (DomainException $e) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => $e->getMessage(),
+                ], 422);
+            }
+
+            return back()->with('error', $e->getMessage());
+        }
     }
 }

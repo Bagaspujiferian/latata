@@ -25,6 +25,7 @@ class PaymentInvoice extends Model
         'grand_total',
         'payment_channel',
         'snap_token',
+        'snap_redirect_url',
         'midtrans_transaction_id',
         'status',
         'expires_at',

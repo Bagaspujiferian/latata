@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AccountRecoveryController;
+use App\Http\Controllers\AccountVerificationController;
 use App\Http\Controllers\AdminChaosLabController;
 use App\Http\Controllers\AdminCmsController;
 use App\Http\Controllers\AdminFinanceController;
@@ -71,6 +72,15 @@ Route::middleware(['auth'])->group(function (): void {
     Route::post('/account/security/pin-reset/confirm', [AccountRecoveryController::class, 'confirmPinReset'])
         ->middleware('throttle:pin-recovery')
         ->name('account.security.pin-reset.confirm');
+    Route::post('/account/security/phone', [AccountVerificationController::class, 'bindPhone'])
+        ->middleware('throttle:wallet-sensitive')
+        ->name('account.security.phone.bind');
+    Route::post('/account/security/otp/send', [AccountVerificationController::class, 'sendOtp'])
+        ->middleware('throttle:verification-otp')
+        ->name('account.security.otp.send');
+    Route::post('/account/security/otp/verify', [AccountVerificationController::class, 'verifyOtp'])
+        ->middleware('throttle:wallet-sensitive')
+        ->name('account.security.otp.verify');
 
     // Pre-Transaction Inbox Chat
     Route::get('/inbox', [InboxController::class, 'index'])->name('inbox.index');
@@ -119,6 +129,12 @@ Route::middleware(['auth'])->group(function (): void {
 
     Route::get('/invoices/{invoice_code}', [CheckoutController::class, 'showInvoice'])->name('invoices.show');
     Route::get('/invoices/{invoice_code}/pdf', [ExportController::class, 'invoicePdf'])->name('invoices.pdf');
+    Route::post('/invoices/{invoice_code}/snap-token', [CheckoutController::class, 'issueSnapToken'])
+        ->middleware('throttle:wallet-sensitive')
+        ->name('invoices.snap-token');
+    Route::post('/invoices/{invoice_code}/sync-status', [CheckoutController::class, 'syncPaymentStatus'])
+        ->middleware('throttle:wallet-sensitive')
+        ->name('invoices.sync-status');
     Route::post('/invoices/{invoice_code}/simulate-pay', [CheckoutController::class, 'simulateMidtransPay'])
         ->middleware('simulation.only')
         ->name('invoices.simulate-pay');
@@ -147,6 +163,12 @@ Route::middleware(['auth'])->group(function (): void {
         ->name('buyer.wallet.topup');
     Route::get('/buyer/wallet/topup/{topup_code}', [WalletTopUpController::class, 'show'])
         ->name('buyer.wallet.topup.show');
+    Route::post('/buyer/wallet/topup/{topup_code}/snap-token', [WalletTopUpController::class, 'issueSnapToken'])
+        ->middleware('throttle:wallet-sensitive')
+        ->name('buyer.wallet.topup.snap-token');
+    Route::post('/buyer/wallet/topup/{topup_code}/sync-status', [WalletTopUpController::class, 'syncPaymentStatus'])
+        ->middleware('throttle:wallet-sensitive')
+        ->name('buyer.wallet.topup.sync-status');
     Route::post('/buyer/wallet/topup/{topup_code}/simulate-pay', [WalletTopUpController::class, 'simulatePay'])
         ->middleware('simulation.only')
         ->name('buyer.wallet.topup.simulate-pay');
@@ -218,56 +240,76 @@ Route::prefix('seller')->name('seller.')->middleware(['auth', 'role:seller'])->g
     Route::post('/reviews/{reviewId}/reply', [SellerDashboardController::class, 'replyReview'])->name('reviews.reply');
 });
 
-// Admin Risk, CMS, Finance P&L & 8-Scenario Backend Chaos Lab
+// Admin Risk, CMS, Finance P&L & 8-Scenario Backend Chaos Lab (Protected by Granular Admin RBAC Matrix)
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:admin'])->group(function (): void {
     // Phase 4: Corporate Finance P&L, Global Ledger Audit & H2H Reconcile
-    Route::get('/finance', [AdminFinanceController::class, 'index'])->name('finance.index');
-    Route::post('/finance/audit-ledger', [AdminFinanceController::class, 'runLedgerAudit'])->name('finance.audit-ledger');
-    Route::post('/finance/reconcile-h2h', [AdminFinanceController::class, 'runH2HReconcile'])->name('finance.reconcile-h2h');
+    Route::get('/finance', [AdminFinanceController::class, 'index'])
+        ->middleware('admin.perm:finance.view')
+        ->name('finance.index');
+    Route::post('/finance/audit-ledger', [AdminFinanceController::class, 'runLedgerAudit'])
+        ->middleware('admin.perm:finance.audit')
+        ->name('finance.audit-ledger');
+    Route::post('/finance/reconcile-h2h', [AdminFinanceController::class, 'runH2HReconcile'])
+        ->middleware('admin.perm:finance.audit')
+        ->name('finance.reconcile-h2h');
 
-    Route::get('/kyc', [AdminKycController::class, 'index'])->name('kyc.index');
-    Route::post('/kyc/{kyc}/approve', [AdminKycController::class, 'approve'])->name('kyc.approve');
-    Route::post('/kyc/{kyc}/reject', [AdminKycController::class, 'reject'])->name('kyc.reject');
+    // KYC Officer & Super Admin
+    Route::middleware('admin.perm:kyc.review')->group(function (): void {
+        Route::get('/kyc', [AdminKycController::class, 'index'])->name('kyc.index');
+        Route::post('/kyc/{kyc}/approve', [AdminKycController::class, 'approve'])->name('kyc.approve');
+        Route::post('/kyc/{kyc}/reject', [AdminKycController::class, 'reject'])->name('kyc.reject');
+    });
 
-    Route::get('/disputes', [AdminChaosLabController::class, 'disputes'])->name('disputes');
-    Route::post('/disputes/{order_code}/resolve', [AdminChaosLabController::class, 'resolveDispute'])->name('disputes.resolve');
-    Route::post('/disputes/{order_code}/messages', [AdminChaosLabController::class, 'sendAdminMessage'])->name('disputes.messages');
+    // CS Arbitrator & Super Admin — Disputes
+    Route::middleware('admin.perm:disputes.resolve')->group(function (): void {
+        Route::get('/disputes', [AdminChaosLabController::class, 'disputes'])->name('disputes');
+        Route::post('/disputes/{order_code}/resolve', [AdminChaosLabController::class, 'resolveDispute'])->name('disputes.resolve');
+        Route::post('/disputes/{order_code}/messages', [AdminChaosLabController::class, 'sendAdminMessage'])->name('disputes.messages');
+    });
 
-    Route::get('/withdrawals', [AdminChaosLabController::class, 'withdrawals'])->name('withdrawals');
-    Route::post('/withdrawals/{id}/approve', [AdminChaosLabController::class, 'approveWithdrawal'])->name('withdrawals.approve');
-    Route::post('/withdrawals/{id}/reject', [AdminChaosLabController::class, 'rejectWithdrawal'])->name('withdrawals.reject');
+    // Finance & Super Admin — Maker-Checker Withdrawals
+    Route::middleware('admin.perm:withdrawals.approve')->group(function (): void {
+        Route::get('/withdrawals', [AdminChaosLabController::class, 'withdrawals'])->name('withdrawals');
+        Route::post('/withdrawals/{id}/approve', [AdminChaosLabController::class, 'approveWithdrawal'])->name('withdrawals.approve');
+        Route::post('/withdrawals/{id}/reject', [AdminChaosLabController::class, 'rejectWithdrawal'])->name('withdrawals.reject');
+    });
 
-    // Phase 3: Anti-Hackback Warranty Court
-    Route::get('/warranties', [AdminWarrantyController::class, 'index'])->name('warranties.index');
-    Route::post('/warranties/{claim}/resolve', [AdminWarrantyController::class, 'resolve'])->name('warranties.resolve');
+    // Phase 3: Anti-Hackback Warranty Court (CS Arbitrator & Super Admin)
+    Route::middleware('admin.perm:warranty.resolve')->group(function (): void {
+        Route::get('/warranties', [AdminWarrantyController::class, 'index'])->name('warranties.index');
+        Route::post('/warranties/{claim}/resolve', [AdminWarrantyController::class, 'resolve'])->name('warranties.resolve');
+    });
 
-    // Phase 3: Admin CMS — Master Catalog
-    Route::get('/cms/catalog', [AdminCmsController::class, 'catalog'])->name('cms.catalog');
-    Route::post('/cms/games', [AdminCmsController::class, 'storeGame'])->name('cms.games.store');
-    Route::put('/cms/games/{id}', [AdminCmsController::class, 'updateGame'])->name('cms.games.update');
-    Route::patch('/cms/games/{id}/toggle', [AdminCmsController::class, 'toggleGame'])->name('cms.games.toggle');
-    Route::post('/cms/categories', [AdminCmsController::class, 'storeCategory'])->name('cms.categories.store');
-    Route::put('/cms/categories/{id}', [AdminCmsController::class, 'updateCategory'])->name('cms.categories.update');
-    Route::post('/cms/attributes', [AdminCmsController::class, 'storeAttribute'])->name('cms.attributes.store');
-    Route::post('/cms/attributes/{attributeId}/options', [AdminCmsController::class, 'storeAttributeOption'])->name('cms.attributes.options.store');
-    Route::delete('/cms/options/{optionId}', [AdminCmsController::class, 'deleteAttributeOption'])->name('cms.attributes.options.delete');
+    // Phase 3: Admin CMS — Master Catalog, Platform Vouchers & Flash Sales (Super Admin)
+    Route::middleware('admin.perm:cms.manage')->group(function (): void {
+        Route::get('/cms/catalog', [AdminCmsController::class, 'catalog'])->name('cms.catalog');
+        Route::post('/cms/games', [AdminCmsController::class, 'storeGame'])->name('cms.games.store');
+        Route::put('/cms/games/{id}', [AdminCmsController::class, 'updateGame'])->name('cms.games.update');
+        Route::patch('/cms/games/{id}/toggle', [AdminCmsController::class, 'toggleGame'])->name('cms.games.toggle');
+        Route::post('/cms/categories', [AdminCmsController::class, 'storeCategory'])->name('cms.categories.store');
+        Route::put('/cms/categories/{id}', [AdminCmsController::class, 'updateCategory'])->name('cms.categories.update');
+        Route::post('/cms/attributes', [AdminCmsController::class, 'storeAttribute'])->name('cms.attributes.store');
+        Route::post('/cms/attributes/{attributeId}/options', [AdminCmsController::class, 'storeAttributeOption'])->name('cms.attributes.options.store');
+        Route::delete('/cms/options/{optionId}', [AdminCmsController::class, 'deleteAttributeOption'])->name('cms.attributes.options.delete');
 
-    // Phase 3: Admin CMS — Platform Vouchers & Flash Sales
-    Route::get('/cms/promos', [AdminCmsController::class, 'promos'])->name('cms.promos');
-    Route::post('/cms/vouchers', [AdminCmsController::class, 'storePlatformVoucher'])->name('cms.vouchers.store');
-    Route::patch('/cms/vouchers/{voucherId}/toggle', [AdminCmsController::class, 'toggleVoucher'])->name('cms.vouchers.toggle');
-    Route::post('/cms/flash-sales', [AdminCmsController::class, 'storeFlashSale'])->name('cms.flash-sales.store');
-    Route::post('/cms/flash-sales/{flashSaleId}/items', [AdminCmsController::class, 'attachFlashSaleItem'])->name('cms.flash-sales.items.attach');
+        Route::get('/cms/promos', [AdminCmsController::class, 'promos'])->name('cms.promos');
+        Route::post('/cms/vouchers', [AdminCmsController::class, 'storePlatformVoucher'])->name('cms.vouchers.store');
+        Route::patch('/cms/vouchers/{voucherId}/toggle', [AdminCmsController::class, 'toggleVoucher'])->name('cms.vouchers.toggle');
+        Route::post('/cms/flash-sales', [AdminCmsController::class, 'storeFlashSale'])->name('cms.flash-sales.store');
+        Route::post('/cms/flash-sales/{flashSaleId}/items', [AdminCmsController::class, 'attachFlashSaleItem'])->name('cms.flash-sales.items.attach');
+    });
 
-    // Phase 3: Moderation Reports & Audit Trail
-    Route::get('/reports', [AdminCmsController::class, 'reports'])->name('reports.index');
-    Route::post('/reports/{report}/resolve', [AdminCmsController::class, 'resolveReport'])->name('reports.resolve');
-    Route::get('/audit-logs', [AdminCmsController::class, 'auditLogs'])->name('audit-logs');
+    // Phase 3: Moderation Reports & Audit Trail (CS Arbitrator & Super Admin)
+    Route::middleware('admin.perm:moderation.manage')->group(function (): void {
+        Route::get('/reports', [AdminCmsController::class, 'reports'])->name('reports.index');
+        Route::post('/reports/{report}/resolve', [AdminCmsController::class, 'resolveReport'])->name('reports.resolve');
+        Route::get('/audit-logs', [AdminCmsController::class, 'auditLogs'])->name('audit-logs');
+    });
 
     Route::get('/chaos-lab', [AdminChaosLabController::class, 'chaosLab'])
-        ->middleware('simulation.only')
+        ->middleware(['simulation.only', 'admin.perm:chaos.run'])
         ->name('chaos-lab');
     Route::post('/chaos-lab/run/{scenario}', [AdminChaosLabController::class, 'runScenario'])
-        ->middleware('simulation.only')
+        ->middleware(['simulation.only', 'admin.perm:chaos.run'])
         ->name('chaos-lab.run');
 });

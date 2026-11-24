@@ -59,7 +59,67 @@
                     </div>
                 </div>
 
+                @php
+                    $isLiveSnapDriver = in_array(config('nexatrade.midtrans.payment_driver', 'simulation'), ['midtrans_sandbox', 'midtrans_production'], true);
+                @endphp
+
                 @if($topup->status === 'UNPAID')
+                    @if($isLiveSnapDriver)
+                        <script src="{{ config('nexatrade.midtrans.snap_js_url') }}" data-client-key="{{ config('nexatrade.midtrans.client_key') }}"></script>
+                        <div class="p-4 rounded-xl bg-[#EFF6FF] border border-[#BFDBFE] space-y-3"
+                             x-data="{
+                                 snapLoading: false,
+                                 snapError: '',
+                                 async payTopupWithSnap() {
+                                     this.snapLoading = true;
+                                     this.snapError = '';
+                                     try {
+                                         const res = await fetch('{{ route('buyer.wallet.topup.snap-token', $topup->topup_code) }}', {
+                                             method: 'POST',
+                                             headers: {
+                                                 'Content-Type': 'application/json',
+                                                 'Accept': 'application/json',
+                                                 'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                                             }
+                                         });
+                                         const data = await res.json();
+                                         if (!res.ok || !data.ok) {
+                                             this.snapError = data.message || 'Gagal memuat token Midtrans Snap.';
+                                             this.snapLoading = false;
+                                             return;
+                                         }
+                                         if (window.snap && typeof window.snap.pay === 'function') {
+                                             window.snap.pay(data.snap_token, {
+                                                 onSuccess: () => { this.$refs.syncTopupForm.submit(); },
+                                                 onPending: () => { this.$refs.syncTopupForm.submit(); },
+                                                 onError: () => { this.snapError = 'Pembayaran Midtrans gagal atau dibatalkan.'; this.snapLoading = false; },
+                                                 onClose: () => { this.snapLoading = false; }
+                                             });
+                                         } else if (data.redirect_url) {
+                                             window.location.href = data.redirect_url;
+                                         }
+                                     } catch (e) {
+                                         this.snapError = 'Terjadi gangguan jaringan saat menghubungi Midtrans Snap.';
+                                         this.snapLoading = false;
+                                     }
+                                 }
+                             }">
+                            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                                <button type="button" @click="payTopupWithSnap()" :disabled="snapLoading"
+                                        class="btn-tactile flex-1 h-11 rounded-xl bg-[#0068E1] hover:bg-[#0055B8] text-white text-sm font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-65">
+                                    <span x-text="snapLoading ? 'Memuat Midtrans Snap...' : 'Bayar Sekarang via Midtrans Snap'"></span>
+                                </button>
+                                <form x-ref="syncTopupForm" method="POST" action="{{ route('buyer.wallet.topup.sync-status', $topup->topup_code) }}">
+                                    @csrf
+                                    <button type="submit" class="btn-tactile w-full sm:w-auto h-11 px-4 rounded-xl bg-white hover:bg-[#F8FAFC] border border-[#0068E1] text-[#0068E1] text-xs font-bold cursor-pointer">
+                                        Sinkronkan Status Pembayaran
+                                    </button>
+                                </form>
+                            </div>
+                            <div x-show="snapError" x-cloak class="p-2.5 rounded-lg bg-[#FEF2F2] border border-[#FECACA] text-[#B91C1C] text-xs font-semibold" x-text="snapError"></div>
+                        </div>
+                    @endif
+
                     @if(config('nexatrade.demo_switcher_enabled'))
                         <form method="POST" action="{{ route('buyer.wallet.topup.simulate-pay', $topup->topup_code) }}"
                               x-data="{ paying: false }" @submit="paying = true" class="pt-2">
@@ -70,7 +130,7 @@
                                 <span x-text="paying ? 'Memproses Pelunasan Idempoten...' : 'Simulasi Bayar Lunas Top-Up'"></span>
                             </button>
                         </form>
-                    @else
+                    @elseif(! $isLiveSnapDriver)
                         <div class="p-4 rounded-xl bg-[#F8FAFC] border border-[#E4E8EE] text-[#4B5563]">
                             Selesaikan pembayaran Top-Up melalui kanal resmi <strong class="uppercase text-[#111827]">{{ str_replace('_', ' ', $topup->payment_channel) }}</strong>. Saldo akan masuk otomatis setelah webhook Midtrans terverifikasi.
                         </div>

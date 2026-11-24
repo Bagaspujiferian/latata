@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Enums\AdminSubrole;
+use App\Security\AdminPermissionMatrix;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -10,11 +12,15 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Crypt;
 
 /**
+ * @property Carbon|null $email_verified_at
+ * @property Carbon|null $phone_verified_at
  * @property Carbon|null $wallet_pin_locked_until
  * @property Carbon|null $wallet_pin_set_at
  * @property Carbon|null $banned_at
+ * @property AdminSubrole|null $admin_subrole
  */
 class User extends Authenticatable
 {
@@ -25,12 +31,17 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'email_verified_at',
+        'phone_encrypted',
+        'phone_blind_hash',
+        'phone_verified_at',
         'password',
         'wallet_pin_hash',
         'wallet_pin_attempts',
         'wallet_pin_locked_until',
         'wallet_pin_set_at',
         'role',
+        'admin_subrole',
         'is_active',
         'is_banned',
         'banned_at',
@@ -41,6 +52,8 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'wallet_pin_hash',
+        'phone_encrypted',
+        'phone_blind_hash',
         'remember_token',
     ];
 
@@ -49,10 +62,12 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'phone_verified_at' => 'datetime',
             'password' => 'hashed',
             'wallet_pin_attempts' => 'integer',
             'wallet_pin_locked_until' => 'datetime',
             'wallet_pin_set_at' => 'datetime',
+            'admin_subrole' => AdminSubrole::class,
             'is_active' => 'boolean',
             'is_banned' => 'boolean',
             'banned_at' => 'datetime',
@@ -174,6 +189,11 @@ class User extends Authenticatable
         return $this->role === 'admin';
     }
 
+    public function hasAdminPermission(string $permission): bool
+    {
+        return AdminPermissionMatrix::allows($this, $permission);
+    }
+
     public function isSeller(): bool
     {
         return $this->role === 'seller';
@@ -182,5 +202,45 @@ class User extends Authenticatable
     public function isBuyer(): bool
     {
         return $this->role === 'buyer';
+    }
+
+    public function isFullyVerifiedForPromo(): bool
+    {
+        return $this->email_verified_at !== null && $this->phone_verified_at !== null;
+    }
+
+    public function decryptedPhone(): ?string
+    {
+        if (empty($this->phone_encrypted)) {
+            return null;
+        }
+
+        try {
+            return Crypt::decryptString((string) $this->phone_encrypted);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    public function maskedPhone(): ?string
+    {
+        $plain = $this->decryptedPhone();
+        if ($plain === null || strlen($plain) < 8) {
+            return null;
+        }
+
+        return substr($plain, 0, 5).'****'.substr($plain, -4);
+    }
+
+    /** @return HasMany<UserVerificationChallenge, $this> */
+    public function verificationChallenges(): HasMany
+    {
+        return $this->hasMany(UserVerificationChallenge::class, 'user_id', 'id');
+    }
+
+    /** @return HasMany<WithdrawalApproval, $this> */
+    public function withdrawalApprovals(): HasMany
+    {
+        return $this->hasMany(WithdrawalApproval::class, 'admin_id', 'id');
     }
 }

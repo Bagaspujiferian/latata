@@ -40,6 +40,132 @@
             </div>
         @endif
 
+        {{-- Card 0: Email & Unique Phone OTP Verification (Anti-Bot Tuyul & Promo Guard) --}}
+        <div class="bg-white border border-[#E4E8EE] rounded-xl p-5 space-y-4 text-xs animate-enter" style="--stagger-index: 1">
+            <div class="pb-3 border-b border-[#F1F5F9] flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-sm font-bold text-[#111827]">Verifikasi Identitas OTP (Email &amp; Nomor Telepon Unik)</h2>
+                    <p class="text-[11px] text-[#6B7280] mt-0.5">
+                        Wajib terverifikasi keduanya untuk mengklaim <strong class="text-[#111827]">Voucher Subsidi Platform</strong> dan membeli produk <strong class="text-[#111827]">Flash Sale</strong> (Proteksi Anti-Tuyul Blind-Index).
+                    </p>
+                </div>
+                @if($user->isFullyVerifiedForPromo())
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#ECFDF5] border border-[#A7F3D0] text-[#047857] text-[11px] font-bold">
+                        <svg class="w-3.5 h-3.5 text-[#00AA5B]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+                        <span>Promo &amp; Flash Sale Eligible</span>
+                    </span>
+                @else
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FFF4ED] border border-[#FED7AA] text-[#C2410C] text-[11px] font-bold">
+                        <svg class="w-3.5 h-3.5 text-[#F05A28]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+                        <span>Verifikasi OTP Belum Lengkap</span>
+                    </span>
+                @endif
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {{-- Email OTP Column --}}
+                <div class="p-4 rounded-xl bg-[#F8FAFC] border border-[#E4E8EE] space-y-3">
+                    <div class="flex items-center justify-between gap-2">
+                        <div>
+                            <div class="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">Kanal 1 &middot; Email Akun</div>
+                            <div class="font-mono-tabular font-bold text-[#111827] mt-0.5">{{ $user->email }}</div>
+                        </div>
+                        @if($user->email_verified_at)
+                            <span class="px-2 py-0.5 rounded-full bg-[#ECFDF5] border border-[#A7F3D0] text-[#047857] text-[10px] font-bold">
+                                Terverifikasi
+                            </span>
+                        @else
+                            <span class="px-2 py-0.5 rounded-full bg-[#FFF4ED] border border-[#FED7AA] text-[#C2410C] text-[10px] font-bold">
+                                Belum Verifikasi
+                            </span>
+                        @endif
+                    </div>
+
+                    @if($user->email_verified_at)
+                        <div class="text-[11px] text-[#047857] font-mono-tabular">
+                            Diverifikasi pada {{ $user->email_verified_at->format('d M Y, H:i') }} WIB
+                        </div>
+                    @else
+                        <div class="flex flex-wrap items-center gap-2 pt-1">
+                            <form method="POST" action="{{ route('account.security.otp.send') }}">
+                                @csrf
+                                <input type="hidden" name="channel" value="email">
+                                <button type="submit" class="btn-tactile h-9 px-3 rounded-lg bg-white hover:bg-[#EFF6FF] border border-[#0068E1] text-[#0068E1] font-bold cursor-pointer">
+                                    Kirim OTP Email
+                                </button>
+                            </form>
+
+                            <form method="POST" action="{{ route('account.security.otp.verify') }}" class="flex items-center gap-1.5 flex-1">
+                                @csrf
+                                <input type="hidden" name="channel" value="email">
+                                <input type="text" name="code" required inputmode="numeric" maxlength="6" pattern="\d{6}" placeholder="6-Digit OTP"
+                                       class="w-full h-9 px-2.5 font-mono-tabular text-center bg-white border border-[#D1D5DB] rounded-lg focus:border-[#0068E1] focus:outline-none">
+                                <button type="submit" class="btn-tactile h-9 px-3 rounded-lg bg-[#0068E1] hover:bg-[#0055B8] text-white font-bold cursor-pointer shrink-0">
+                                    Verifikasi
+                                </button>
+                            </form>
+                        </div>
+                    @endif
+                </div>
+
+                {{-- Phone OTP Column --}}
+                <div class="p-4 rounded-xl bg-[#F8FAFC] border border-[#E4E8EE] space-y-3">
+                    <div class="flex items-center justify-between gap-2">
+                        <div>
+                            <div class="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">Kanal 2 &middot; Nomor Telepon (AES-256 + Blind Hash)</div>
+                            <div class="font-mono-tabular font-bold text-[#111827] mt-0.5">
+                                {{ $user->maskedPhone() ?? 'Belum Ditautkan' }}
+                            </div>
+                        </div>
+                        @if($user->phone_verified_at)
+                            <span class="px-2 py-0.5 rounded-full bg-[#ECFDF5] border border-[#A7F3D0] text-[#047857] text-[10px] font-bold">
+                                Terverifikasi
+                            </span>
+                        @else
+                            <span class="px-2 py-0.5 rounded-full bg-[#FFF4ED] border border-[#FED7AA] text-[#C2410C] text-[10px] font-bold">
+                                Belum Verifikasi
+                            </span>
+                        @endif
+                    </div>
+
+                    <form method="POST" action="{{ route('account.security.phone.bind') }}" class="flex items-center gap-2">
+                        @csrf
+                        <input type="text" name="phone" required value="{{ old('phone', $user->decryptedPhone() ?? '') }}" placeholder="Contoh: 081234567890"
+                               class="w-full h-9 px-3 font-mono-tabular bg-white border border-[#D1D5DB] rounded-lg focus:border-[#0068E1] focus:outline-none">
+                        <button type="submit" class="btn-tactile h-9 px-3 rounded-lg bg-white hover:bg-[#F8FAFC] border border-[#D1D5DB] text-[#111827] font-bold cursor-pointer shrink-0">
+                            Simpan Nomor
+                        </button>
+                    </form>
+
+                    @if($user->phone_verified_at)
+                        <div class="text-[11px] text-[#047857] font-mono-tabular">
+                            Diverifikasi pada {{ $user->phone_verified_at->format('d M Y, H:i') }} WIB
+                        </div>
+                    @elseif($user->phone_blind_hash)
+                        <div class="flex flex-wrap items-center gap-2 pt-1">
+                            <form method="POST" action="{{ route('account.security.otp.send') }}">
+                                @csrf
+                                <input type="hidden" name="channel" value="phone">
+                                <button type="submit" class="btn-tactile h-9 px-3 rounded-lg bg-white hover:bg-[#EFF6FF] border border-[#0068E1] text-[#0068E1] font-bold cursor-pointer">
+                                    Kirim OTP Nomor
+                                </button>
+                            </form>
+
+                            <form method="POST" action="{{ route('account.security.otp.verify') }}" class="flex items-center gap-1.5 flex-1">
+                                @csrf
+                                <input type="hidden" name="channel" value="phone">
+                                <input type="text" name="code" required inputmode="numeric" maxlength="6" pattern="\d{6}" placeholder="6-Digit OTP"
+                                       class="w-full h-9 px-2.5 font-mono-tabular text-center bg-white border border-[#D1D5DB] rounded-lg focus:border-[#0068E1] focus:outline-none">
+                                <button type="submit" class="btn-tactile h-9 px-3 rounded-lg bg-[#00AA5B] hover:bg-[#00924E] text-white font-bold cursor-pointer shrink-0">
+                                    Verifikasi
+                                </button>
+                            </form>
+                        </div>
+                    @endif
+                </div>
+            </div>
+        </div>
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
             {{-- Card 1: Set / Update 6-Digit Wallet PIN --}}
             <form method="POST" action="{{ route('account.security.pin') }}"

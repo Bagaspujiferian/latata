@@ -248,6 +248,8 @@ class SecurityHardeningPatchTest extends TestCase
         $buyer = User::create([
             'name' => 'Hoarder Test Buyer',
             'email' => 'hoarder@nexatrade.id',
+            'email_verified_at' => now(),
+            'phone_verified_at' => now(),
             'password' => Hash::make('password123'),
             'role' => 'buyer',
             'is_active' => true,

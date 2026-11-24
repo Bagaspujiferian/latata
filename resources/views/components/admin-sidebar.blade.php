@@ -7,9 +7,12 @@
 ])
 
 @php
-    $opsItems = [
+    $authAdmin = auth()->user();
+
+    $opsItems = array_values(array_filter([
         [
             'route' => 'admin.kyc.index',
+            'perm' => 'kyc.review',
             'label' => 'Verifikasi KYC',
             'active' => request()->routeIs('admin.kyc.*'),
             'badge' => $pendingKycs,
@@ -18,6 +21,7 @@
         ],
         [
             'route' => 'admin.warranties.index',
+            'perm' => 'warranty.resolve',
             'label' => 'Klaim Garansi',
             'active' => request()->routeIs('admin.warranties.*'),
             'badge' => $openWarrantyClaims,
@@ -26,6 +30,7 @@
         ],
         [
             'route' => 'admin.disputes',
+            'perm' => 'disputes.resolve',
             'label' => 'Meja Sengketa',
             'active' => request()->routeIs('admin.disputes'),
             'badge' => $openDisputes,
@@ -34,6 +39,7 @@
         ],
         [
             'route' => 'admin.reports.index',
+            'perm' => 'moderation.manage',
             'label' => 'Laporan Moderasi',
             'active' => request()->routeIs('admin.reports.*'),
             'badge' => $openReports,
@@ -42,46 +48,52 @@
         ],
         [
             'route' => 'admin.withdrawals',
+            'perm' => 'withdrawals.approve',
             'label' => 'Approval Tarik Saldo',
             'active' => request()->routeIs('admin.withdrawals'),
             'badge' => $pendingWithdrawals,
             'badgeTone' => 'bg-[#FFF4ED] text-[#C2410C] border-[#FED7AA]',
             'icon' => '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>',
         ],
-    ];
+    ], fn (array $item): bool => ! $authAdmin || $authAdmin->hasAdminPermission($item['perm'])));
 
-    $cmsItems = [
+    $cmsItems = array_values(array_filter([
         [
             'route' => 'admin.finance.index',
+            'perm' => 'finance.view',
             'label' => 'Finance P&L & Ledger',
             'active' => request()->routeIs('admin.finance.*'),
             'icon' => '<line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
         ],
         [
             'route' => 'admin.cms.catalog',
+            'perm' => 'cms.manage',
             'label' => 'Master Katalog CMS',
             'active' => request()->routeIs('admin.cms.catalog') || request()->routeIs('admin.cms.games.*') || request()->routeIs('admin.cms.categories.*') || request()->routeIs('admin.cms.attributes.*'),
             'icon' => '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
         ],
         [
             'route' => 'admin.cms.promos',
+            'perm' => 'cms.manage',
             'label' => 'Promo & Flash Sale',
             'active' => request()->routeIs('admin.cms.promos') || request()->routeIs('admin.cms.vouchers.*') || request()->routeIs('admin.cms.flash-sales.*'),
             'icon' => '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
         ],
         [
             'route' => 'admin.audit-logs',
+            'perm' => 'moderation.manage',
             'label' => 'Audit Trail Log',
             'active' => request()->routeIs('admin.audit-logs'),
             'icon' => '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/>',
         ],
         [
             'route' => 'admin.chaos-lab',
+            'perm' => 'chaos.run',
             'label' => 'Chaos Lab Workbench',
             'active' => request()->routeIs('admin.chaos-lab'),
             'icon' => '<polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/>',
         ],
-    ];
+    ], fn (array $item): bool => ! $authAdmin || $authAdmin->hasAdminPermission($item['perm'])));
 @endphp
 
 <aside class="w-full lg:w-64 shrink-0">
@@ -95,7 +107,9 @@
                 </div>
                 <div class="min-w-0">
                     <div class="text-xs font-bold text-[#111827] truncate">Admin Risk &amp; CMS</div>
-                    <div class="text-[11px] text-[#6B7280]">Escrow Governance</div>
+                    <div class="text-[11px] text-[#0068E1] font-semibold">
+                        {{ $authAdmin?->admin_subrole?->label() ?? 'Super Admin' }}
+                    </div>
                 </div>
             </div>
         </div>

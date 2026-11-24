@@ -30,6 +30,7 @@ use App\Services\EscrowLedgerService;
 use App\Services\FinanceAndLedgerAuditService;
 use App\Services\NotificationService;
 use App\Services\OrderStateAndSlaService;
+use App\Services\PhoneNormalizer;
 use App\Services\SellerKycService;
 use App\Services\VaultEncryptionService;
 use App\Services\WalletTopUpService;
@@ -58,17 +59,29 @@ class DatabaseSeeder extends Seeder
         // =====================================================================
         // 1. USERS, WALLETS, SELLER PROFILES & 7-DAY OPERATING HOURS
         // =====================================================================
+        $phoneNormalizer = app(PhoneNormalizer::class);
+        $seedNow = now();
+
         $admin = User::create([
             'name' => 'Arif Wijaya (Admin & Chaos Engineer)',
             'email' => 'admin@nexatrade.id',
+            'email_verified_at' => $seedNow,
+            'phone_encrypted' => Crypt::encryptString('628110000001'),
+            'phone_blind_hash' => $phoneNormalizer->computeBlindHash('628110000001'),
+            'phone_verified_at' => $seedNow,
             'password' => Hash::make('password123'),
             'role' => 'admin',
+            'admin_subrole' => 'super_admin',
             'is_active' => true,
         ]);
 
         $seller1 = User::create([
             'name' => 'Raka Pratama',
             'email' => 'juragan@nexatrade.id',
+            'email_verified_at' => $seedNow,
+            'phone_encrypted' => Crypt::encryptString('628110000002'),
+            'phone_blind_hash' => $phoneNormalizer->computeBlindHash('628110000002'),
+            'phone_verified_at' => $seedNow,
             'password' => Hash::make('password123'),
             'role' => 'seller',
             'is_active' => true,
@@ -77,6 +90,10 @@ class DatabaseSeeder extends Seeder
         $seller2 = User::create([
             'name' => 'Dimas Mahendra',
             'email' => 'sultan@nexatrade.id',
+            'email_verified_at' => $seedNow,
+            'phone_encrypted' => Crypt::encryptString('628110000003'),
+            'phone_blind_hash' => $phoneNormalizer->computeBlindHash('628110000003'),
+            'phone_verified_at' => $seedNow,
             'password' => Hash::make('password123'),
             'role' => 'seller',
             'is_active' => true,
@@ -85,6 +102,10 @@ class DatabaseSeeder extends Seeder
         $buyer1 = User::create([
             'name' => 'Bagas Ferian',
             'email' => 'bagas@nexatrade.id',
+            'email_verified_at' => $seedNow,
+            'phone_encrypted' => Crypt::encryptString('628110000004'),
+            'phone_blind_hash' => $phoneNormalizer->computeBlindHash('628110000004'),
+            'phone_verified_at' => $seedNow,
             'password' => Hash::make('password123'),
             'role' => 'buyer',
             'is_active' => true,
@@ -93,6 +114,10 @@ class DatabaseSeeder extends Seeder
         $buyer2 = User::create([
             'name' => 'Fajar ProPlayer',
             'email' => 'proplayer@nexatrade.id',
+            'email_verified_at' => $seedNow,
+            'phone_encrypted' => Crypt::encryptString('628110000005'),
+            'phone_blind_hash' => $phoneNormalizer->computeBlindHash('628110000005'),
+            'phone_verified_at' => $seedNow,
             'password' => Hash::make('password123'),
             'role' => 'buyer',
             'is_active' => true,

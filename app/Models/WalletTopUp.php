@@ -4,7 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property Carbon|null $paid_at
+ * @property Carbon|null $expires_at
+ */
 class WalletTopUp extends Model
 {
     protected $table = 'wallet_topups';
@@ -16,6 +21,8 @@ class WalletTopUp extends Model
         'amount',
         'payment_channel',
         'gateway_reference',
+        'snap_token',
+        'snap_redirect_url',
         'status',
         'paid_at',
         'expires_at',

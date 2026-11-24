@@ -1,13 +1,26 @@
 <?php
 
+$midtransIsProduction = (bool) env('MIDTRANS_IS_PRODUCTION', false);
+
 return [
     'app_brand' => 'NexaTrade Enterprise Engine',
     'demo_switcher_enabled' => (bool) env('NEXATRADE_DEMO_SWITCHER', env('APP_ENV', 'local') !== 'production'),
 
     'midtrans' => [
+        'payment_driver' => env('NEXATRADE_PAYMENT_DRIVER', 'simulation'),
+        'is_production' => $midtransIsProduction,
+        'merchant_id' => env('MIDTRANS_MERCHANT_ID', 'G000000000'),
         'server_key' => env('MIDTRANS_SERVER_KEY', 'SB-Mid-server-NexaTradeEnterpriseKey2026'),
         'client_key' => env('MIDTRANS_CLIENT_KEY', 'SB-Mid-client-NexaTradeEnterpriseKey2026'),
-        'is_production' => (bool) env('MIDTRANS_IS_PRODUCTION', false),
+        'snap_api_url' => $midtransIsProduction
+            ? 'https://app.midtrans.com/snap/v1/transactions'
+            : 'https://app.sandbox.midtrans.com/snap/v1/transactions',
+        'core_api_url' => $midtransIsProduction
+            ? 'https://api.midtrans.com'
+            : 'https://api.sandbox.midtrans.com',
+        'snap_js_url' => $midtransIsProduction
+            ? 'https://app.midtrans.com/snap/snap.js'
+            : 'https://app.sandbox.midtrans.com/snap/snap.js',
     ],
 
     'digiflazz' => [
@@ -32,6 +45,7 @@ return [
 
     'withdrawal_admin_fee' => 2500.00,
     'withdrawal_min_amount' => 10000.00,
+    'withdrawal_maker_checker_threshold' => (float) env('NEXATRADE_WITHDRAWAL_MAKER_CHECKER_THRESHOLD', 5000000),
     'invoice_expiry_minutes' => 30,
     'flash_sale_invoice_ttl_minutes' => (int) env('NEXATRADE_FLASH_SALE_TTL_MINUTES', 15),
     'max_unpaid_invoices_per_buyer' => (int) env('NEXATRADE_MAX_UNPAID_INVOICES', 3),
