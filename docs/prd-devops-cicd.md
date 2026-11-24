@@ -63,7 +63,7 @@ Template environment siap pakai untuk Docker: `APP_ENV=production`, `APP_DEBUG=f
     6. Siapkan `.env` CI dari `.env.example` + `php artisan key:generate`, arahkan koneksi DB CI ke `127.0.0.1:3306` (`db_latata_test`, `root`, `ci_root_password`).
     7. **Gate 1 — Code Style:** `vendor/bin/pint --test`
     8. **Gate 2 — Static Analysis Lv 8:** `vendor/bin/phpstan analyse --memory-limit=1G`
-    9. **Gate 3 — Full Test Suite (MySQL 8.4 InnoDB):** `php artisan test --no-interaction` (memastikan `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` di-override lewat `env:` step agar konsisten dengan `phpunit.xml`!).
+    9. **Gate 3 — Full Test Suite (MySQL 8.4 InnoDB):** `php artisan test` (memastikan `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` di-override lewat `env:` step agar konsisten dengan `phpunit.xml`!).
     10. **Gate 4 — Fresh Migration, Seeder & Global Ledger Audit:** `php artisan migrate:fresh --seed --force` diikuti `php artisan nexatrade:audit-ledger` (wajib exit code `0` & `[BALANCED]`).
 - **Job `docker-build-check` (`ubuntu-latest`, berjalan paralel / setelah checkout):**
   - Validasi sintaks `docker compose config --quiet` dan uji build image `docker build --target app -t latata:ci-check .` untuk menjamin `Dockerfile` tidak pernah rusak saat ada update dependensi.
@@ -71,7 +71,7 @@ Template environment siap pakai untuk Docker: `APP_ENV=production`, `APP_DEBUG=f
 ---
 
 ## 4. Checklist Eksekusi
-- [ ] Checkpoint 1: Inspeksi `composer.json`, `package.json`, `phpunit.xml`, `.env.example`, dan `routes/console.php` untuk memastikan kompatibilitas variabel lingkungan antara lokal Laragon, Docker, dan GitHub Actions.
-- [ ] Checkpoint 2: Buat `Dockerfile`, `.dockerignore`, `docker/php/php.ini`, `docker/php/opcache.ini`, `docker/nginx/default.conf`, `docker/entrypoint.sh`, `docker-compose.yml`, dan `.env.docker.example`.
-- [ ] Checkpoint 3: Buat `.github/workflows/ci.yml` dengan MySQL 8.4 InnoDB service container, 4 quality gates, dan job validasi Docker build.
-- [ ] Checkpoint 4: Validasi sintaks YAML & Dockerfile (serta `docker compose config` jika Docker CLI tersedia di mesin lokal), lalu verifikasi 0 regresi pada lingkungan lokal (`phpstan` Level 8, `pint --test`, `npm run build`, `nexatrade:audit-ledger`, dan `php artisan test` 96/96 lulus).
+- [x] Checkpoint 1: Inspeksi `composer.json`, `package.json`, `phpunit.xml`, `.env.example`, dan `routes/console.php` untuk memastikan kompatibilitas variabel lingkungan antara lokal Laragon, Docker, dan GitHub Actions.
+- [x] Checkpoint 2: Buat `Dockerfile`, `.dockerignore`, `docker/php/php.ini`, `docker/php/opcache.ini`, `docker/nginx/default.conf`, `docker/entrypoint.sh`, `docker-compose.yml`, dan `.env.docker.example`.
+- [x] Checkpoint 3: Buat `.github/workflows/ci.yml` dengan MySQL 8.4 InnoDB service container, 4 quality gates, dan job validasi Docker build.
+- [x] Checkpoint 4: Validasi sintaks YAML & Dockerfile (serta `docker compose config` jika Docker CLI tersedia di mesin lokal), lalu verifikasi 0 regresi pada lingkungan lokal (`phpstan` Level 8, `pint --test`, `npm run build`, `nexatrade:audit-ledger`, dan `php artisan test` 96/96 lulus).
