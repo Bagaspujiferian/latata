@@ -52,7 +52,7 @@ class CheckoutSplitOrderService
             throw new DomainException("Mode pembayaran tidak valid: [{$paymentMode}].");
         }
 
-        return DB::transaction(function () use (
+        $invoice = DB::transaction(function () use (
             $buyerId,
             $paymentMode,
             $paymentChannel,
@@ -523,6 +523,8 @@ class CheckoutSplitOrderService
 
                 DB::table('payment_invoices')->where('id', $invoice->id)->update([
                     'status' => 'PAID',
+                    'gateway_payment_type' => 'wallet',
+                    'gateway_mdr_fee' => '0.00',
                     'midtrans_transaction_id' => 'WALLET-'.$invoice->invoice_code,
                     'paid_at' => now(),
                     'updated_at' => now(),
@@ -562,8 +564,10 @@ class CheckoutSplitOrderService
                 );
             }
 
-            return $invoice->refresh()->load(['orders.items', 'orders.sellerProfile']);
+            return $invoice;
         });
+
+        return $invoice->refresh()->load(['orders.items', 'orders.sellerProfile']);
     }
 
     /**

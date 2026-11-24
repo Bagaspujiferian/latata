@@ -2,12 +2,36 @@
 
 namespace App\Services;
 
+use App\Jobs\SendUserNotificationJob;
 use App\Models\User;
 use App\Models\UserNotification;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class NotificationService
 {
+    public function notifyAfterCommit(
+        int $userId,
+        string $category,
+        string $title,
+        string $body,
+        ?string $actionUrl = null,
+        ?string $refType = null,
+        ?int $refId = null,
+    ): void {
+        DB::afterCommit(static function () use ($userId, $category, $title, $body, $actionUrl, $refType, $refId): void {
+            SendUserNotificationJob::dispatch(
+                $userId,
+                $category,
+                $title,
+                $body,
+                $actionUrl,
+                $refType,
+                $refId,
+            )->afterCommit();
+        });
+    }
+
     public function notify(
         int $userId,
         string $category,

@@ -200,6 +200,7 @@ class MidtransSnapGatewayService
             'order_id' => $resolvedOrderId,
             'status_code' => $resolvedStatusCode,
             'gross_amount' => $resolvedGrossAmount,
+            'payment_type' => (string) ($remoteStatus['payment_type'] ?? ''),
             'transaction_status' => $transactionStatus,
             'fraud_status' => $fraudStatus,
             'transaction_id' => $transactionId,

@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Services\AdminCmsAndAuditService;
 use App\Services\FinanceAndLedgerAuditService;
 use App\Services\H2HReconciliationService;
+use App\Services\SchedulerHeartbeatService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,6 +22,7 @@ class AdminFinanceController extends Controller
         private readonly FinanceAndLedgerAuditService $financeService,
         private readonly H2HReconciliationService $h2hReconciliationService,
         private readonly AdminCmsAndAuditService $auditService,
+        private readonly SchedulerHeartbeatService $heartbeatService,
     ) {}
 
     public function index(Request $request): View
@@ -32,6 +34,7 @@ class AdminFinanceController extends Controller
         $to = $toInput !== '' ? Carbon::parse($toInput)->endOfDay() : null;
 
         $summary = $this->financeService->getFinancePnLSummary($from, $to);
+        $workerHealth = $this->heartbeatService->getDashboardHealthSummary();
 
         $auditSnapshots = LedgerAuditSnapshot::orderByDesc('id')->limit(15)->get();
         $adCreditPurchases = AdCreditPurchase::with(['sellerProfile', 'package'])
@@ -49,6 +52,7 @@ class AdminFinanceController extends Controller
 
         return view('admin.finance', compact(
             'summary',
+            'workerHealth',
             'auditSnapshots',
             'adCreditPurchases',
             'debtRepayments',

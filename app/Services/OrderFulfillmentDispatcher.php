@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Exceptions\InsufficientVaultStockException;
+use App\Jobs\DispatchH2HOrderJob;
 use App\Models\Order;
 use App\Models\User;
 use App\Support\StateTransitionGuard;
@@ -11,7 +12,6 @@ use Illuminate\Support\Facades\DB;
 class OrderFulfillmentDispatcher
 {
     public function __construct(
-        private readonly DigiflazzH2HService $h2hService,
         private readonly SellerSlaMetricsService $slaMetricsService,
         private readonly ChatModerationService $chatModerationService,
         private readonly NotificationService $notificationService,
@@ -150,13 +150,15 @@ class OrderFulfillmentDispatcher
 
             DB::table('orders')->where('id', $orderRow->id)->update([
                 'status' => 'PROCESSING',
-                'h2h_reference_id' => $orderRow->order_code,
                 'sla_deadline_at' => $slaDeadline,
                 'updated_at' => now(),
             ]);
 
             $freshOrder = Order::with(['items.product', 'paymentInvoice'])->findOrFail((int) $orderRow->id);
-            $this->h2hService->dispatchTopUp($freshOrder);
+            $freshOrderId = (int) $freshOrder->id;
+            DB::afterCommit(static function () use ($freshOrderId): void {
+                DispatchH2HOrderJob::dispatch($freshOrderId)->afterCommit();
+            });
 
             $this->chatModerationService->postOrderMessage(
                 order: $freshOrder,

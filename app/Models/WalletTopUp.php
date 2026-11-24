@@ -20,6 +20,8 @@ class WalletTopUp extends Model
         'user_id',
         'amount',
         'payment_channel',
+        'gateway_payment_type',
+        'gateway_mdr_fee',
         'gateway_reference',
         'snap_token',
         'snap_redirect_url',
@@ -33,6 +35,7 @@ class WalletTopUp extends Model
     {
         return [
             'amount' => 'decimal:2',
+            'gateway_mdr_fee' => 'decimal:2',
             'paid_at' => 'datetime',
             'expires_at' => 'datetime',
         ];

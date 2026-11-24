@@ -19,6 +19,7 @@ class MidtransWebhookService
         private readonly VoucherAccountingService $voucherService,
         private readonly WalletTopUpService $walletTopUpService,
         private readonly NotificationService $notificationService,
+        private readonly PaymentMdrCalculatorService $mdrCalculatorService = new PaymentMdrCalculatorService,
     ) {}
 
     public function generateSignature(string $orderId, string $statusCode, string $grossAmount): string
@@ -139,7 +140,12 @@ class MidtransWebhookService
                         );
                     }
 
-                    $settledTopup = $this->walletTopUpService->settleTopUp($orderId, $transactionId);
+                    $rawTopupPaymentType = trim((string) ($payload['payment_type'] ?? ''));
+                    $resolvedTopupPaymentType = $rawTopupPaymentType !== ''
+                        ? $rawTopupPaymentType
+                        : (string) ($topupRow->payment_channel ?: 'midtrans_snap');
+
+                    $settledTopup = $this->walletTopUpService->settleTopUp($orderId, $transactionId, $resolvedTopupPaymentType);
 
                     $log = PaymentWebhookLog::create([
                         'provider' => 'midtrans',
@@ -320,8 +326,16 @@ class MidtransWebhookService
                 // NORMAL SETTLEMENT
                 StateTransitionGuard::assertInvoiceTransition($invoiceRow->status, 'PAID', "Midtrans Settlement {$orderId}");
 
+                $rawInvoicePaymentType = trim((string) ($payload['payment_type'] ?? ''));
+                $resolvedInvoicePaymentType = $rawInvoicePaymentType !== ''
+                    ? $rawInvoicePaymentType
+                    : (string) ($invoiceRow->payment_channel ?: 'midtrans_snap');
+                $mdrResult = $this->mdrCalculatorService->calculate($resolvedInvoicePaymentType, $expectedGross);
+
                 DB::table('payment_invoices')->where('id', $invoiceRow->id)->update([
                     'status' => 'PAID',
+                    'gateway_payment_type' => $mdrResult->normalizedChannel,
+                    'gateway_mdr_fee' => number_format($mdrResult->mdrFee, 2, '.', ''),
                     'midtrans_transaction_id' => $transactionId,
                     'paid_at' => now(),
                     'updated_at' => now(),

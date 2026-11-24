@@ -6,6 +6,8 @@ use App\Models\AdCreditPurchase;
 use App\Models\DebtRepayment;
 use App\Models\LedgerAuditSnapshot;
 use App\Models\Order;
+use App\Models\PaymentInvoice;
+use App\Models\WalletTopUp;
 use App\Models\WarrantyClaim;
 use App\Models\WithdrawalRequest;
 use Illuminate\Support\Carbon;
@@ -130,6 +132,8 @@ class FinanceAndLedgerAuditService
         $withdrawalFeeQuery = WithdrawalRequest::where('status', 'APPROVED_PAID');
         $warrantyDebtQuery = WarrantyClaim::where('status', 'approved_refund');
         $debtRepayQuery = DebtRepayment::query();
+        $paidInvoicesMdrQuery = PaymentInvoice::where('status', 'PAID');
+        $paidTopupsMdrQuery = WalletTopUp::where('status', 'PAID');
 
         if ($from !== null) {
             $gmvQuery->where('created_at', '>=', $from);
@@ -138,6 +142,8 @@ class FinanceAndLedgerAuditService
             $withdrawalFeeQuery->where('processed_at', '>=', $from);
             $warrantyDebtQuery->where('resolved_at', '>=', $from);
             $debtRepayQuery->where('created_at', '>=', $from);
+            $paidInvoicesMdrQuery->where('paid_at', '>=', $from);
+            $paidTopupsMdrQuery->where('paid_at', '>=', $from);
         }
 
         if ($to !== null) {
@@ -147,6 +153,8 @@ class FinanceAndLedgerAuditService
             $withdrawalFeeQuery->where('processed_at', '<=', $to);
             $warrantyDebtQuery->where('resolved_at', '<=', $to);
             $debtRepayQuery->where('created_at', '<=', $to);
+            $paidInvoicesMdrQuery->where('paid_at', '<=', $to);
+            $paidTopupsMdrQuery->where('paid_at', '<=', $to);
         }
 
         $gmv = round((float) $gmvQuery->sum('gross_amount'), 2);
@@ -155,6 +163,10 @@ class FinanceAndLedgerAuditService
         $withdrawalFeeRevenue = round((float) $withdrawalFeeQuery->sum('admin_fee'), 2);
         $platformVoucherSubsidy = round((float) (clone $completedOrdersQuery)->sum('platform_discount_amount'), 2);
 
+        $totalInvoiceMdrCost = round((float) $paidInvoicesMdrQuery->sum('gateway_mdr_fee'), 2);
+        $totalTopupMdrCost = round((float) $paidTopupsMdrQuery->sum('gateway_mdr_fee'), 2);
+        $totalGatewayMdrCost = round($totalInvoiceMdrCost + $totalTopupMdrCost, 2);
+
         $grossHackbackDebt = round((float) $warrantyDebtQuery->sum('recorded_seller_debt'), 2);
         $recoveredDebt = round((float) $debtRepayQuery->sum('amount'), 2);
         $netHackbackExposure = round(max(0.0, $grossHackbackDebt - $recoveredDebt), 2);
@@ -162,6 +174,7 @@ class FinanceAndLedgerAuditService
         $grossRevenueTotal = round($grossCommission + $adCreditsRevenue + $withdrawalFeeRevenue, 2);
         $totalExpenses = round($platformVoucherSubsidy + $netHackbackExposure, 2);
         $netPlatformRevenue = round($grossRevenueTotal - $totalExpenses, 2);
+        $trueNetOperatingProfit = round($grossRevenueTotal - $platformVoucherSubsidy - $totalGatewayMdrCost, 2);
 
         $custodyRow = DB::table('wallets')
             ->selectRaw('COALESCE(SUM(pending_balance), 0) AS pending_total')
@@ -184,7 +197,13 @@ class FinanceAndLedgerAuditService
             'ad_credits_revenue' => $adCreditsRevenue,
             'withdrawal_fee_revenue' => $withdrawalFeeRevenue,
             'gross_revenue_total' => $grossRevenueTotal,
+            'gross_platform_revenue' => $grossRevenueTotal,
             'platform_voucher_subsidy_expense' => $platformVoucherSubsidy,
+            'total_voucher_subsidy' => $platformVoucherSubsidy,
+            'total_invoice_mdr_cost' => $totalInvoiceMdrCost,
+            'total_topup_mdr_cost' => $totalTopupMdrCost,
+            'total_gateway_mdr_cost' => $totalGatewayMdrCost,
+            'true_net_operating_profit' => $trueNetOperatingProfit,
             'gross_hackback_debt' => $grossHackbackDebt,
             'recovered_debt' => $recoveredDebt,
             'net_hackback_exposure' => $netHackbackExposure,

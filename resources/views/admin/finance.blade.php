@@ -26,7 +26,7 @@
             </div>
 
             {{-- Primary P&L KPI Cards --}}
-            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5 animate-enter" style="--stagger-index: 1">
+            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3.5 animate-enter" style="--stagger-index: 1">
                 <div class="bg-white border border-[#E4E8EE] rounded-xl p-4 card-elevate">
                     <div class="text-[11px] font-semibold text-[#6B7280]">GMV (Gross Merchandise Value)</div>
                     <div class="font-mono-tabular text-lg font-extrabold text-[#111827] mt-1">
@@ -47,6 +47,17 @@
                 </div>
 
                 <div class="bg-white border border-[#E4E8EE] rounded-xl p-4 card-elevate">
+                    <div class="text-[11px] font-semibold text-[#6B7280]">Biaya MDR Payment Gateway</div>
+                    <div class="font-mono-tabular text-lg font-extrabold text-[#D97706] mt-1">
+                        - Rp {{ number_format((float) ($summary['total_gateway_mdr_cost'] ?? 0), 0, ',', '.') }}
+                    </div>
+                    <div class="text-[10px] text-[#4B5563] mt-1 font-mono-tabular">
+                        Inv Rp {{ number_format((float) ($summary['total_invoice_mdr_cost'] ?? 0), 0, ',', '.') }}
+                        &middot; Top-Up Rp {{ number_format((float) ($summary['total_topup_mdr_cost'] ?? 0), 0, ',', '.') }}
+                    </div>
+                </div>
+
+                <div class="bg-white border border-[#E4E8EE] rounded-xl p-4 card-elevate">
                     <div class="text-[11px] font-semibold text-[#6B7280]">Beban Subsidi &amp; Eksposur Hackback</div>
                     <div class="font-mono-tabular text-lg font-extrabold text-[#F05A28] mt-1">
                         - Rp {{ number_format((float) $summary['total_expenses'], 0, ',', '.') }}
@@ -58,12 +69,12 @@
                 </div>
 
                 <div class="bg-[#ECFDF5] border border-[#A7F3D0] rounded-xl p-4 card-elevate">
-                    <div class="text-[11px] font-bold text-[#065F46]">Laba Bersih Platform (Net Revenue)</div>
-                    <div class="font-mono-tabular text-lg font-extrabold {{ $summary['net_platform_revenue'] >= 0 ? 'text-[#047857]' : 'text-[#DC2626]' }} mt-1">
-                        Rp {{ number_format((float) $summary['net_platform_revenue'], 0, ',', '.') }}
+                    <div class="text-[11px] font-bold text-[#065F46]">True Net Operating Profit</div>
+                    <div class="font-mono-tabular text-lg font-extrabold {{ ($summary['true_net_operating_profit'] ?? $summary['net_platform_revenue']) >= 0 ? 'text-[#047857]' : 'text-[#DC2626]' }} mt-1">
+                        Rp {{ number_format((float) ($summary['true_net_operating_profit'] ?? $summary['net_platform_revenue']), 0, ',', '.') }}
                     </div>
                     <div class="text-[10px] text-[#047857] mt-1 font-mono-tabular">
-                        Admin Fee WD: Rp {{ number_format((float) $summary['withdrawal_fee_revenue'], 0, ',', '.') }}
+                        Net Rev: Rp {{ number_format((float) $summary['net_platform_revenue'], 0, ',', '.') }} &middot; WD Fee: Rp {{ number_format((float) $summary['withdrawal_fee_revenue'], 0, ',', '.') }}
                     </div>
                 </div>
             </div>
@@ -136,6 +147,94 @@
                     </div>
                 </div>
             </div>
+
+            {{-- System Worker Health (Scheduler Heartbeat) Card --}}
+            @if(isset($workerHealth))
+                <div class="bg-white border border-[#E4E8EE] rounded-xl overflow-hidden animate-enter" style="--stagger-index: 3">
+                    <div class="px-5 py-3.5 bg-[#F8FAFC] border-b border-[#E4E8EE] flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-8 h-8 rounded-lg bg-[#EFF6FF] border border-[#BFDBFE] text-[#0068E1] flex items-center justify-center shrink-0">
+                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                            </span>
+                            <div>
+                                <h2 class="text-sm font-bold text-[#111827]">System Worker Health (Scheduler Heartbeat)</h2>
+                                <p class="text-[11px] text-[#6B7280]">Deteksi otomatis cron/worker mati diam-diam (`STALE` bila melewati 2&times; interval jadwal).</p>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2 text-[11px] font-mono-tabular">
+                            <span class="px-2.5 py-0.5 rounded-full bg-[#ECFDF5] border border-[#A7F3D0] text-[#047857] font-bold">
+                                HEALTHY: {{ $workerHealth['healthy_count'] }}/{{ $workerHealth['total'] }}
+                            </span>
+                            @if($workerHealth['stale_count'] > 0)
+                                <span class="px-2.5 py-0.5 rounded-full bg-[#FFFBEB] border border-[#FDE68A] text-[#B45309] font-bold">
+                                    STALE: {{ $workerHealth['stale_count'] }}
+                                </span>
+                            @endif
+                            @if($workerHealth['failed_count'] > 0)
+                                <span class="px-2.5 py-0.5 rounded-full bg-[#FEF2F2] border border-[#FECACA] text-[#B91C1C] font-bold">
+                                    FAILED: {{ $workerHealth['failed_count'] }}
+                                </span>
+                            @endif
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-[#F8FAFC] border-b border-[#E4E8EE] text-[11px] font-semibold uppercase text-[#6B7280]">
+                                <tr>
+                                    <th class="px-4 py-3">Worker Command</th>
+                                    <th class="px-4 py-3">Interval</th>
+                                    <th class="px-4 py-3">Terakhir Selesai</th>
+                                    <th class="px-4 py-3 text-right">Durasi</th>
+                                    <th class="px-4 py-3">Ringkasan / Error</th>
+                                    <th class="px-4 py-3 text-right">Health Status</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-[#F1F5F9]">
+                                @foreach($workerHealth['workers'] as $w)
+                                    @php
+                                        $statusVal = $w['health_status']->value ?? (string) $w['health_status'];
+                                        $pillClass = match ($statusVal) {
+                                            'healthy' => 'bg-[#ECFDF5] border-[#A7F3D0] text-[#047857]',
+                                            'stale' => 'bg-[#FFFBEB] border-[#FDE68A] text-[#B45309]',
+                                            'failed' => 'bg-[#FEF2F2] border-[#FECACA] text-[#B91C1C]',
+                                            'running' => 'bg-[#EFF6FF] border-[#BFDBFE] text-[#0068E1]',
+                                            default => 'bg-[#F1F5F9] border-[#E4E8EE] text-[#4B5563]',
+                                        };
+                                    @endphp
+                                    <tr class="row-interactive">
+                                        <td class="px-4 py-3">
+                                            <div class="font-bold text-[#111827]">{{ $w['display_name'] }}</div>
+                                            <div class="font-mono-tabular text-[11px] text-[#0068E1]">{{ $w['command_name'] }}</div>
+                                        </td>
+                                        <td class="px-4 py-3 font-mono-tabular text-[#4B5563]">
+                                            Setiap {{ $w['expected_interval_minutes'] }}m
+                                        </td>
+                                        <td class="px-4 py-3 font-mono-tabular text-[11px] text-[#4B5563]">
+                                            {{ $w['last_finished_at'] ? $w['last_finished_at']->format('d M Y H:i:s') : 'Belum Pernah' }}
+                                        </td>
+                                        <td class="px-4 py-3 text-right font-mono-tabular text-[#111827]">
+                                            {{ $w['last_duration_ms'] !== null ? number_format($w['last_duration_ms'], 0, ',', '.').' ms' : '-' }}
+                                        </td>
+                                        <td class="px-4 py-3 text-[11px] max-w-md truncate">
+                                            @if(! empty($w['last_error']))
+                                                <span class="text-[#DC2626] font-semibold">{{ $w['last_error'] }}</span>
+                                            @else
+                                                <span class="text-[#6B7280]">{{ $w['last_summary'] ?? '-' }}</span>
+                                            @endif
+                                        </td>
+                                        <td class="px-4 py-3 text-right">
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full border text-[10px] font-extrabold font-mono-tabular {{ $pillClass }}">
+                                                {{ $w['health_label'] }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            @endif
 
             {{-- Audit Snapshots Table --}}
             <div class="bg-white border border-[#E4E8EE] rounded-xl overflow-hidden animate-enter" style="--stagger-index: 3">

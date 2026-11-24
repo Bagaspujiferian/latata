@@ -16,6 +16,7 @@ class WalletTopUpService
     public function __construct(
         private readonly EscrowLedgerService $ledgerService,
         private readonly NotificationService $notificationService,
+        private readonly PaymentMdrCalculatorService $mdrCalculatorService = new PaymentMdrCalculatorService,
     ) {}
 
     public function createTopUp(int $userId, float $amount, string $channel = 'midtrans_snap'): WalletTopUp
@@ -43,11 +44,12 @@ class WalletTopUpService
     }
 
     /**
-     * Atomically settle a wallet top-up (idempotent) and mark credited funds as non-withdrawable (Anti-Gestun).
+     * Atomically settle a wallet top-up (idempotent), record gateway MDR fee for corporate P&L,
+     * and mark credited funds as non-withdrawable (Anti-Gestun).
      */
-    public function settleTopUp(string $topupCode, string $gatewayRef): WalletTopUp
+    public function settleTopUp(string $topupCode, string $gatewayRef, ?string $gatewayPaymentType = null): WalletTopUp
     {
-        return DB::transaction(function () use ($topupCode, $gatewayRef): WalletTopUp {
+        return DB::transaction(function () use ($topupCode, $gatewayRef, $gatewayPaymentType): WalletTopUp {
             $topupRow = DB::table('wallet_topups')
                 ->where('topup_code', $topupCode)
                 ->lockForUpdate()
@@ -67,6 +69,10 @@ class WalletTopUpService
             }
 
             $amount = round((float) $topupRow->amount, 2);
+            $rawPaymentType = ($gatewayPaymentType !== null && trim($gatewayPaymentType) !== '')
+                ? trim($gatewayPaymentType)
+                : (string) ($topupRow->payment_channel ?: 'midtrans_snap');
+            $mdrResult = $this->mdrCalculatorService->calculate($rawPaymentType, $amount);
 
             // Credit available_balance + increment non_withdrawable_portion atomically under wallet lock.
             $this->ledgerService->creditWalletTopUp(
@@ -79,6 +85,8 @@ class WalletTopUpService
                 ->where('id', $topupRow->id)
                 ->update([
                     'status' => 'PAID',
+                    'gateway_payment_type' => $mdrResult->normalizedChannel,
+                    'gateway_mdr_fee' => number_format($mdrResult->mdrFee, 2, '.', ''),
                     'gateway_reference' => mb_substr(trim($gatewayRef), 0, 100),
                     'paid_at' => now(),
                     'updated_at' => now(),

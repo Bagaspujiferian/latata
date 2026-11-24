@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\HeartbeatRunStatus;
 use App\Models\AdCreditPackage;
 use App\Models\AttributeOption;
 use App\Models\CartItem;
@@ -9,10 +10,12 @@ use App\Models\CategoryAttribute;
 use App\Models\Game;
 use App\Models\GameCategory;
 use App\Models\OrderReview;
+use App\Models\PaymentInvoice;
 use App\Models\Product;
 use App\Models\ProductAttributeValue;
 use App\Models\ProductBoost;
 use App\Models\ProductImage;
+use App\Models\SchedulerHeartbeat;
 use App\Models\SellerKycVerification;
 use App\Models\SellerProfile;
 use App\Models\StoreOperatingHour;
@@ -30,7 +33,9 @@ use App\Services\EscrowLedgerService;
 use App\Services\FinanceAndLedgerAuditService;
 use App\Services\NotificationService;
 use App\Services\OrderStateAndSlaService;
+use App\Services\PaymentMdrCalculatorService;
 use App\Services\PhoneNormalizer;
+use App\Services\SchedulerHeartbeatService;
 use App\Services\SellerKycService;
 use App\Services\VaultEncryptionService;
 use App\Services\WalletTopUpService;
@@ -1312,6 +1317,36 @@ class DatabaseSeeder extends Seeder
         $walletTopUpService->settleTopUp($buyer2TopUp->topup_code, 'SEED-TOPUP-B2-001');
 
         $walletTopUpService->createTopUp($buyer1->id, 100000.00, 'qris');
+
+        // 3. Backfill realistic gateway_payment_type & gateway_mdr_fee on seeded PAID invoices (strictly corporate P&L metadata; zero custody wallet impact!)
+        $mdrCalculator = app(PaymentMdrCalculatorService::class);
+        foreach (PaymentInvoice::where('status', 'PAID')->get() as $paidInv) {
+            $channel = (string) ($paidInv->payment_channel ?: 'qris');
+            $mdrRes = $mdrCalculator->calculate($channel, (float) $paidInv->grand_total);
+            $paidInv->update([
+                'gateway_payment_type' => $mdrRes->normalizedChannel,
+                'gateway_mdr_fee' => number_format($mdrRes->mdrFee, 2, '.', ''),
+            ]);
+        }
+
+        // 4. Seed initial scheduler_heartbeats rows so /admin/finance System Worker Health is immediately informative
+        $heartbeatNow = now();
+        foreach (SchedulerHeartbeatService::REGISTERED_WORKERS as $cmdName => $meta) {
+            SchedulerHeartbeat::updateOrCreate(
+                ['command_name' => $cmdName],
+                [
+                    'display_name' => $meta['display_name'],
+                    'expected_interval_minutes' => $meta['expected_interval_minutes'],
+                    'last_started_at' => $heartbeatNow->copy()->subSeconds(2),
+                    'last_finished_at' => $heartbeatNow->copy()->subSecond(),
+                    'last_status' => HeartbeatRunStatus::OK,
+                    'last_duration_ms' => 38,
+                    'last_summary' => 'Seeded baseline worker health check OK',
+                    'last_error' => null,
+                    'consecutive_failures' => 0,
+                ],
+            );
+        }
 
         // Generate initial global ledger reconciliation snapshot (must be BALANCED with Rp 0 discrepancy!)
         $financeAuditService->runGlobalLedgerAudit('seeder');
