@@ -120,6 +120,51 @@
                                     <span class="text-xs font-bold text-[#111827]">Otomatis</span>
                                 </label>
                             </div>
+
+                            <div class="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-[#FFFBEB] border border-[#FDE68A]">
+                                <div>
+                                    <div class="text-xs font-bold text-[#92400E]">Mode Libur (Vacation Mode)</div>
+                                    <p class="text-[11px] text-[#B45309] mt-0.5">Jeda pesanan Manual Trade saat libur; Brankas Instan &amp; H2H tetap jalan 24/7.</p>
+                                </div>
+                                <input type="hidden" name="is_on_vacation" value="0">
+                                <label class="inline-flex items-center gap-2 shrink-0 cursor-pointer select-none px-3 py-1.5 rounded-lg bg-white border border-[#FDE68A]">
+                                    <input type="checkbox" name="is_on_vacation" value="1"
+                                           @checked((bool) old('is_on_vacation', $profile?->is_on_vacation))
+                                           class="w-4 h-4 accent-[#F59E0B]">
+                                    <span class="text-xs font-bold text-[#92400E]">Mode Libur</span>
+                                </label>
+                            </div>
+
+                            <div class="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-[#EFF6FF] border border-[#BFDBFE]">
+                                <div>
+                                    <div class="text-xs font-bold text-[#1E3A8A]">Pergeseran SLA Jam Operasional (SLA-Aware)</div>
+                                    <p class="text-[11px] text-[#1E40AF] mt-0.5">Pesanan manual di luar jam buka tetap diterima &amp; timer SLA digeser ke jam buka berikutnya.</p>
+                                </div>
+                                <input type="hidden" name="operating_hours_enabled" value="0">
+                                <label class="inline-flex items-center gap-2 shrink-0 cursor-pointer select-none px-3 py-1.5 rounded-lg bg-white border border-[#BFDBFE]">
+                                    <input type="checkbox" name="operating_hours_enabled" value="1"
+                                           @checked((bool) old('operating_hours_enabled', $profile?->operating_hours_enabled))
+                                           class="w-4 h-4 accent-[#0068E1]">
+                                    <span class="text-xs font-bold text-[#0068E1]">SLA-Aware</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                            <div>
+                                <label class="block font-semibold text-[#374151] mb-1">Catatan Mode Libur (Ditampilkan di Etalase)</label>
+                                <input type="text" name="vacation_note" value="{{ old('vacation_note', $profile?->vacation_note) }}" maxlength="255"
+                                       placeholder="Contoh: Admin sedang libur hingga Senin pukul 08:00 WIB. Produk Instan tetap aktif 24/7."
+                                       class="w-full h-9 px-3 bg-[#F8FAFC] border border-[#D1D5DB] rounded-lg focus:bg-white focus:border-[#0068E1] focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block font-semibold text-[#374151] mb-1">Zona Waktu Operasional Toko</label>
+                                <select name="operating_timezone" class="w-full h-9 px-3 bg-[#F8FAFC] border border-[#D1D5DB] rounded-lg focus:bg-white focus:border-[#0068E1] focus:outline-none">
+                                    @foreach(['Asia/Jakarta' => 'Asia/Jakarta (WIB - UTC+7)', 'Asia/Makassar' => 'Asia/Makassar (WITA - UTC+8)', 'Asia/Jayapura' => 'Asia/Jayapura (WIT - UTC+9)'] as $tzKey => $tzLabel)
+                                        <option value="{{ $tzKey }}" @selected(old('operating_timezone', $profile?->operating_timezone ?? 'Asia/Jakarta') === $tzKey)>{{ $tzLabel }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
                         </div>
 
                         {{-- 7-Day Schedule Table --}}

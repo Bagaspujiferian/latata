@@ -13,6 +13,7 @@ use Illuminate\Support\Carbon;
  * @property array<string, mixed>|null $seller_delivery_proof
  * @property array<string, mixed>|null $h2h_response_log
  * @property Carbon|null $sla_deadline_at
+ * @property Carbon|null $seller_accepted_at
  * @property Carbon|null $delivered_at
  * @property Carbon|null $auto_complete_at
  * @property Carbon|null $completed_at
@@ -40,10 +41,13 @@ class Order extends Model
         'h2h_response_log',
         'sla_target_minutes_snapshot',
         'sla_deadline_at',
+        'seller_accepted_at',
         'delivered_at',
         'auto_complete_at',
         'completed_at',
+        'cancelled_by_role',
         'cancelled_reason',
+        'cancellation_reason',
         'dispute_buyer_refund_percent',
         'dispute_buyer_refund_amount',
         'dispute_seller_release_amount',
@@ -67,6 +71,7 @@ class Order extends Model
             'h2h_response_log' => 'array',
             'sla_target_minutes_snapshot' => 'integer',
             'sla_deadline_at' => 'datetime',
+            'seller_accepted_at' => 'datetime',
             'delivered_at' => 'datetime',
             'auto_complete_at' => 'datetime',
             'completed_at' => 'datetime',

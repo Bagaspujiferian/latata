@@ -214,6 +214,34 @@
                         <strong class="text-[#111827]">Keterangan:</strong> {{ $order->cancelled_reason }}
                     </div>
                 @endif
+
+                {{-- Buyer Pre-Processing Cancellation Box (Manual Trade Only, Before Seller Accepts) --}}
+                @if($order->delivery_method === 'manual_trade' && in_array($order->status, ['PAID_ESCROW', 'PROCESSING'], true) && (int) $order->buyer_id === (int) auth()->id())
+                    @if($order->seller_accepted_at === null)
+                        <form method="POST" action="{{ route('buyer.orders.cancel', $order->order_code) }}"
+                              class="p-4 rounded-xl bg-[#F8FAFC] border border-[#E4E8EE] space-y-2.5 text-xs">
+                            @csrf
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                    <div class="font-bold text-[#111827]">Batalkan Pesanan (Sebelum Diproses Penjual)</div>
+                                    <p class="text-[11px] text-[#6B7280]">Selama penjual belum menekan Mulai Proses Pesanan, Anda dapat membatalkan pesanan dan menerima refund instan Rp {{ number_format($order->refundableBuyerAmount(), 0, ',', '.') }} ke Saldo Aktif.</p>
+                                </div>
+                            </div>
+                            <div class="flex flex-col sm:flex-row gap-2">
+                                <input type="text" name="reason" required minlength="3" maxlength="255"
+                                       placeholder="Alasan pembatalan singkat (contoh: salah pilih server / ingin ganti nominal)..."
+                                       class="flex-1 h-9 px-3 bg-white border border-[#D1D5DB] rounded-lg focus:border-[#DC2626] focus:outline-none">
+                                <button type="submit" class="btn-tactile px-4 h-9 rounded-lg bg-[#DC2626] hover:bg-[#B91C1C] text-white font-bold shrink-0 cursor-pointer">
+                                    Batalkan Pesanan
+                                </button>
+                            </div>
+                        </form>
+                    @else
+                        <div class="p-3.5 rounded-xl bg-[#EFF6FF] border border-[#BFDBFE] text-xs text-[#1E40AF] flex items-center justify-between gap-2">
+                            <span><strong>Penjual Sedang Memproses Pesanan:</strong> Diterima pada {{ $order->seller_accepted_at->format('d M Y, H:i:s') }} WIB. Pembatalan sepihak dikunci hingga batas SLA.</span>
+                        </div>
+                    @endif
+                @endif
             </div>
 
             {{-- LIGHT-MODE BRANKAS DIGITAL AES-256 CARD --}}

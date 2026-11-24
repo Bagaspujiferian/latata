@@ -119,6 +119,20 @@ class StorefrontService
             if (array_key_exists('auto_schedule_enabled', $profileData)) {
                 $profile->auto_schedule_enabled = (bool) $profileData['auto_schedule_enabled'];
             }
+            if (array_key_exists('is_on_vacation', $profileData)) {
+                $profile->is_on_vacation = (bool) $profileData['is_on_vacation'];
+            }
+            if (array_key_exists('vacation_note', $profileData)) {
+                $profile->vacation_note = $profileData['vacation_note'] !== null && trim((string) $profileData['vacation_note']) !== ''
+                    ? mb_substr(trim((string) $profileData['vacation_note']), 0, 255)
+                    : null;
+            }
+            if (array_key_exists('operating_hours_enabled', $profileData)) {
+                $profile->operating_hours_enabled = (bool) $profileData['operating_hours_enabled'];
+            }
+            if (! empty($profileData['operating_timezone'])) {
+                $profile->operating_timezone = mb_substr(trim((string) $profileData['operating_timezone']), 0, 40);
+            }
 
             if ($bannerFile !== null) {
                 $profile->store_banner_path = $this->imageUploadService->storeSanitizedImage(

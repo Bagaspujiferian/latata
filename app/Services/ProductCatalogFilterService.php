@@ -11,6 +11,10 @@ use Illuminate\Support\Facades\DB;
 
 class ProductCatalogFilterService
 {
+    public function __construct(
+        private readonly FulltextQuerySanitizer $fulltextSanitizer = new FulltextQuerySanitizer,
+    ) {}
+
     /**
      * Build an indexed, N+1-free catalog query using whereExists subqueries on product_attribute_values.
      *
@@ -65,13 +69,34 @@ class ProductCatalogFilterService
         }
 
         $search = trim((string) ($filters['q'] ?? ''));
+        $booleanQuery = null;
+
         if ($search !== '') {
-            $query->where(function (Builder $q) use ($search): void {
-                $q->where('products.title', 'like', "%{$search}%")
-                    ->orWhere('products.sku_code', 'like', "%{$search}%")
-                    ->orWhereHas('sellerProfile', fn (Builder $sq) => $sq->where('store_name', 'like', "%{$search}%"))
-                    ->orWhereHas('gameCategory.game', fn (Builder $gq) => $gq->where('name', 'like', "%{$search}%"));
-            });
+            $booleanQuery = $this->fulltextSanitizer->buildBooleanQuery($search);
+            $escapedLike = $this->fulltextSanitizer->escapeLike($search);
+
+            if ($booleanQuery !== null && DB::connection()->getDriverName() === 'mysql') {
+                $query->where(function (Builder $q) use ($booleanQuery, $escapedLike): void {
+                    $q->whereRaw('MATCH(products.title, products.description) AGAINST(? IN BOOLEAN MODE)', [$booleanQuery]);
+
+                    if ($escapedLike !== '') {
+                        $q->orWhere('products.sku_code', 'like', "%{$escapedLike}%")
+                            ->orWhereHas('sellerProfile', fn (Builder $sq) => $sq->where('store_name', 'like', "%{$escapedLike}%"))
+                            ->orWhereHas('gameCategory.game', fn (Builder $gq) => $gq->where('name', 'like', "%{$escapedLike}%"));
+                    }
+                });
+            } elseif ($escapedLike !== '') {
+                $query->where(function (Builder $q) use ($escapedLike): void {
+                    $q->where('products.title', 'like', "%{$escapedLike}%")
+                        ->orWhere('products.description', 'like', "%{$escapedLike}%")
+                        ->orWhere('products.sku_code', 'like', "%{$escapedLike}%")
+                        ->orWhereHas('sellerProfile', fn (Builder $sq) => $sq->where('store_name', 'like', "%{$escapedLike}%"))
+                        ->orWhereHas('gameCategory.game', fn (Builder $gq) => $gq->where('name', 'like', "%{$escapedLike}%"));
+                });
+            } else {
+                // Search consisted purely of stripped operator characters -> return empty result set safely
+                $query->whereRaw('1 = 0');
+            }
         }
 
         // Dynamic Indexed Attribute Filters (supports BOTH attrs[attribute_id] AND legacy attr[slug])
@@ -157,16 +182,23 @@ class ProductCatalogFilterService
         }
 
         $sort = (string) ($filters['sort'] ?? 'recommended');
-        match ($sort) {
-            'price_asc' => $query->orderBy('products.price', 'asc'),
-            'price_desc' => $query->orderBy('products.price', 'desc'),
-            'bestseller' => $query->orderByDesc('products.sold_count'),
-            'fastest' => $query->orderBy('products.sla_target_minutes', 'asc'),
-            'newest' => $query->orderByDesc('products.id'),
-            default => $query->orderByDesc('products.is_featured')
+        if ($sort === 'recommended' && $booleanQuery !== null && DB::connection()->getDriverName() === 'mysql') {
+            $query->orderByRaw('MATCH(products.title, products.description) AGAINST(? IN BOOLEAN MODE) DESC', [$booleanQuery])
+                ->orderByDesc('products.is_featured')
                 ->orderByDesc('products.last_bumped_at')
-                ->orderByDesc('products.sold_count'),
-        };
+                ->orderByDesc('products.sold_count');
+        } else {
+            match ($sort) {
+                'price_asc' => $query->orderBy('products.price', 'asc'),
+                'price_desc' => $query->orderBy('products.price', 'desc'),
+                'bestseller' => $query->orderByDesc('products.sold_count'),
+                'fastest' => $query->orderBy('products.sla_target_minutes', 'asc'),
+                'newest' => $query->orderByDesc('products.id'),
+                default => $query->orderByDesc('products.is_featured')
+                    ->orderByDesc('products.last_bumped_at')
+                    ->orderByDesc('products.sold_count'),
+            };
+        }
 
         return $query;
     }

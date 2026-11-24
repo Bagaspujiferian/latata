@@ -10,7 +10,7 @@ final class StateTransitionGuard
     /** @var array<string, list<string>> */
     public const ORDER_TRANSITIONS = [
         'WAITING_PAYMENT' => ['PAID_ESCROW', 'CANCELLED'],
-        'PAID_ESCROW' => ['DELIVERED', 'PROCESSING'],
+        'PAID_ESCROW' => ['DELIVERED', 'PROCESSING', 'REFUNDED'],
         'PROCESSING' => ['DELIVERED', 'REFUNDED'],
         'DELIVERED' => ['COMPLETED', 'DISPUTED'],
         'DISPUTED' => ['COMPLETED', 'REFUNDED'],

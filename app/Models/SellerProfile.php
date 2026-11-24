@@ -31,6 +31,10 @@ class SellerProfile extends Model
         'is_sla_10m_badge',
         'is_store_open',
         'auto_schedule_enabled',
+        'is_on_vacation',
+        'vacation_note',
+        'operating_hours_enabled',
+        'operating_timezone',
         'is_suspended',
         'suspension_reason',
         'ad_credits',
@@ -47,6 +51,8 @@ class SellerProfile extends Model
             'is_sla_10m_badge' => 'boolean',
             'is_store_open' => 'boolean',
             'auto_schedule_enabled' => 'boolean',
+            'is_on_vacation' => 'boolean',
+            'operating_hours_enabled' => 'boolean',
             'is_suspended' => 'boolean',
             'ad_credits' => 'integer',
         ];
@@ -98,11 +104,11 @@ class SellerProfile extends Model
     }
 
     /**
-     * Evaluate effective store open status in Asia/Jakarta timezone combining manual toggle + optional 7-day auto schedule.
+     * Evaluate effective store open status in configured store timezone combining manual toggle, vacation mode, and 7-day auto schedule.
      */
     public function isCurrentlyOpen(?Carbon $now = null): bool
     {
-        if ($this->is_suspended || ! $this->is_store_open) {
+        if ($this->is_suspended || ! $this->is_store_open || $this->is_on_vacation) {
             return false;
         }
 
@@ -110,8 +116,9 @@ class SellerProfile extends Model
             return true;
         }
 
-        $jakartaNow = ($now ?? now())->copy()->timezone('Asia/Jakarta');
-        $dayOfWeek = (int) $jakartaNow->dayOfWeek;
+        $tz = ! empty($this->operating_timezone) ? (string) $this->operating_timezone : 'Asia/Jakarta';
+        $localNow = ($now ?? now())->copy()->timezone($tz);
+        $dayOfWeek = (int) $localNow->dayOfWeek;
 
         $hours = $this->relationLoaded('operatingHours')
             ? $this->operatingHours->firstWhere('day_of_week', $dayOfWeek)
@@ -125,7 +132,7 @@ class SellerProfile extends Model
             return false;
         }
 
-        $currentTime = $jakartaNow->format('H:i:s');
+        $currentTime = $localNow->format('H:i:s');
         $openTime = (string) $hours->open_time;
         $closeTime = (string) $hours->close_time;
 

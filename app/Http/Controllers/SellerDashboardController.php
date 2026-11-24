@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\BulkImportVaultRequest;
 use App\Models\DebtRepayment;
 use App\Models\GameCategory;
 use App\Models\Order;
@@ -12,12 +13,13 @@ use App\Models\UserBankAccount;
 use App\Models\WalletMutation;
 use App\Models\WithdrawalRequest;
 use App\Services\ChatModerationService;
+use App\Services\ManualOrderCancellationService;
 use App\Services\OrderStateAndSlaService;
 use App\Services\ProductMerchandisingService;
 use App\Services\SecureImageUploadService;
 use App\Services\SellerCatalogService;
 use App\Services\StorefrontService;
-use App\Services\VaultEncryptionService;
+use App\Services\VaultBulkImportService;
 use App\Services\WalletPinService;
 use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -29,8 +31,9 @@ class SellerDashboardController extends Controller
 {
     public function __construct(
         private readonly SellerCatalogService $catalogService,
-        private readonly VaultEncryptionService $vaultService,
+        private readonly VaultBulkImportService $vaultBulkImportService,
         private readonly OrderStateAndSlaService $orderStateService,
+        private readonly ManualOrderCancellationService $manualOrderCancellationService,
         private readonly ChatModerationService $chatModerationService,
         private readonly ProductMerchandisingService $merchandisingService,
         private readonly StorefrontService $storefrontService,
@@ -268,20 +271,37 @@ class SellerDashboardController extends Controller
         }
     }
 
-    public function ingestVault(Request $request, int $id): RedirectResponse
+    public function ingestVault(BulkImportVaultRequest $request, int $id): RedirectResponse
     {
-        $validated = $request->validate([
-            'vault_lines' => ['required', 'string', 'min:3'],
-        ]);
-
-        $lines = preg_split('/\r\n|\r|\n/', $validated['vault_lines']) ?: [];
+        $lines = $request->extractRawLines();
 
         try {
-            $report = $this->vaultService->bulkIngestVaultItems($id, $this->requireUser($request)->id, $lines);
+            $bulkResult = $this->vaultBulkImportService->importLines(
+                sellerId: $this->requireUser($request)->id,
+                productId: $id,
+                rawLines: $lines,
+            );
+
+            $currentAvailableStock = (int) Product::where('id', $id)->value('stock');
+            $totalDuplicates = $bulkResult->skippedDuplicateInBatchCount + $bulkResult->skippedDuplicateInDbCount;
+
+            $report = [
+                'product_id' => $id,
+                'total_lines_processed' => $bulkResult->totalLinesProcessed,
+                'inserted_count' => $bulkResult->insertedCount,
+                'duplicate_count' => $totalDuplicates,
+                'skipped_duplicate_in_batch_count' => $bulkResult->skippedDuplicateInBatchCount,
+                'skipped_duplicate_in_db_count' => $bulkResult->skippedDuplicateInDbCount,
+                'skipped_empty_count' => $bulkResult->skippedEmptyCount,
+                'current_available_stock' => $currentAvailableStock,
+                'rejected_duplicates' => [],
+            ];
 
             return back()
                 ->with('vault_ingest_report', $report)
-                ->with('success', "Brankas AES-256 Diperbarui: {$report['inserted_count']} kode baru terenkripsi, {$report['duplicate_count']} duplikat diblokir via HMAC-SHA256 Blind Index. Stok tersedia kini: {$report['current_available_stock']}.");
+                ->with('success', "Brankas AES-256 Diperbarui: {$bulkResult->insertedCount} kode baru terenkripsi, {$totalDuplicates} duplikat dilewati ({$bulkResult->skippedDuplicateInBatchCount} batch / {$bulkResult->skippedDuplicateInDbCount} DB), {$bulkResult->skippedEmptyCount} baris kosong. Stok tersedia kini: {$currentAvailableStock}.");
+        } catch (AuthorizationException $e) {
+            abort(403, $e->getMessage());
         } catch (DomainException $e) {
             return back()->with('error', $e->getMessage());
         }
@@ -307,6 +327,24 @@ class SellerDashboardController extends Controller
             ->get();
 
         return view('seller.orders', compact('user', 'orders', 'statusFilter'));
+    }
+
+    public function acceptManualOrder(Request $request, string $orderCode): RedirectResponse
+    {
+        $order = Order::where('order_code', $orderCode)->firstOrFail();
+
+        try {
+            $this->manualOrderCancellationService->sellerAcceptManualOrder(
+                sellerId: $this->requireUser($request)->id,
+                orderId: (int) $order->id,
+            );
+
+            return back()->with('success', "Pesanan {$order->order_code} mulai diproses! Pembatalan sepihak oleh pembeli kini dikunci hingga batas SLA.");
+        } catch (AuthorizationException $e) {
+            abort(403, $e->getMessage());
+        } catch (DomainException $e) {
+            return back()->with('error', $e->getMessage());
+        }
     }
 
     public function deliverOrder(Request $request, string $orderCode): RedirectResponse
@@ -446,6 +484,10 @@ class SellerDashboardController extends Controller
             'store_banner_url' => ['nullable', 'string', 'max:255'],
             'is_store_open' => ['nullable', 'boolean'],
             'auto_schedule_enabled' => ['nullable', 'boolean'],
+            'is_on_vacation' => ['nullable', 'boolean'],
+            'vacation_note' => ['nullable', 'string', 'max:255'],
+            'operating_hours_enabled' => ['nullable', 'boolean'],
+            'operating_timezone' => ['nullable', 'string', 'max:40'],
             'hours' => ['nullable', 'array'],
         ]);
 
@@ -458,6 +500,18 @@ class SellerDashboardController extends Controller
 
         if ($request->has('is_store_open')) {
             $profileData['is_store_open'] = $request->boolean('is_store_open');
+        }
+        if ($request->has('is_on_vacation')) {
+            $profileData['is_on_vacation'] = $request->boolean('is_on_vacation');
+        }
+        if ($request->has('vacation_note')) {
+            $profileData['vacation_note'] = $validated['vacation_note'] ?? null;
+        }
+        if ($request->has('operating_hours_enabled')) {
+            $profileData['operating_hours_enabled'] = $request->boolean('operating_hours_enabled');
+        }
+        if (! empty($validated['operating_timezone'])) {
+            $profileData['operating_timezone'] = $validated['operating_timezone'];
         }
 
         if (! empty($validated['store_banner_url'])) {

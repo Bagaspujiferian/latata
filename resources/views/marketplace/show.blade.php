@@ -546,7 +546,17 @@
                         </div>
                     @endif
 
-                    @if($isClosedManual)
+                    @if($product->sellerProfile?->is_on_vacation)
+                        <div class="p-3 rounded-lg bg-[#FFFBEB] border border-[#FDE68A] text-[#92400E] text-xs space-y-1">
+                            <div class="font-bold">Mode Libur Toko Aktif</div>
+                            <p class="text-[11px] text-[#B45309]">
+                                {{ $product->sellerProfile->vacation_note ?: 'Penjual sedang libur sementara untuk pengiriman Manual Trade.' }}
+                                @if($deliveryMethod !== 'manual_trade')
+                                    <strong class="block text-[#047857] mt-0.5">Produk ini ({{ strtoupper($deliveryMethod) }}) tetap dapat dibeli dan dikirim otomatis 24/7!</strong>
+                                @endif
+                            </p>
+                        </div>
+                    @elseif($isClosedManual)
                         <div class="p-3 rounded-lg bg-[#FFF4ED] border border-[#FED7AA] text-[#C2410C] text-xs">
                             <strong>Toko Tutup / Di Luar Jam Operasional:</strong> Produk manual trade dijeda sementara. Brankas Instan &amp; H2H tetap aktif 24/7.
                         </div>

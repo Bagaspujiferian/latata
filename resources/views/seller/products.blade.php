@@ -319,20 +319,24 @@
                             <div x-show="vaultOpen" x-cloak class="p-5 bg-[#F8FAFC] border-t border-[#E4E8EE]">
                                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
                                     <div class="lg:col-span-7">
-                                        <div class="text-xs font-bold text-[#111827]">Upload Massal Brankas AES-256 (Blind-Index Deduplication)</div>
+                                        <div class="text-xs font-bold text-[#111827]">Bulk Import Kode Brankas AES-256 (Paste Multiline / Upload .TXT &amp; .CSV)</div>
                                         <p class="text-[11px] text-[#6B7280] mt-0.5">
-                                            Masukkan 1 kode voucher atau `email:password | recovery` per baris. Duplikat otomatis ditolak menggunakan HMAC-SHA256 sebelum enkripsi AES-256.
+                                            Masukkan 1 kode voucher atau `email:password | recovery` per baris (maks. 500 baris per transaksi) atau unggah file `.txt`/`.csv` (maks. 512KB). Duplikat internal batch &amp; DB otomatis dilewati via HMAC-SHA256 Blind Index.
                                         </p>
-                                        <form method="POST" action="{{ route('seller.products.vault', $product->id) }}" @submit="uploadingVault = true" class="mt-3 space-y-2.5">
+                                        <form method="POST" action="{{ route('seller.products.vault', $product->id) }}" enctype="multipart/form-data" @submit="uploadingVault = true" class="mt-3 space-y-2.5">
                                             @csrf
-                                            <textarea name="vault_lines" rows="4" required
+                                            <textarea name="vault_codes_text" rows="4"
                                                       placeholder="STEAM-CODE-NEW-0001&#10;STEAM-CODE-NEW-0002&#10;STEAM-CODE-NEW-0003"
                                                       class="w-full px-3 py-2.5 font-mono-tabular text-xs bg-white text-[#111827] border border-[#D1D5DB] rounded-lg focus:border-[#00AA5B] focus:outline-none"></textarea>
-                                            <button type="submit" :disabled="uploadingVault"
-                                                    class="btn-tactile px-4 py-2 rounded-lg bg-[#00AA5B] hover:bg-[#00924E] text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-65">
-                                                <svg x-show="uploadingVault" x-cloak class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity="0.25" stroke-width="3"/><path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
-                                                <span x-text="uploadingVault ? 'Mengenkripsi AES-256...' : 'Enkripsi & Simpan ke Brankas'"></span>
-                                            </button>
+                                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                                <input type="file" name="vault_codes_file" accept=".txt,.csv"
+                                                       class="text-[11px] text-[#4B5563] file:mr-2.5 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-[#D1D5DB] file:bg-white file:text-[11px] file:font-semibold file:text-[#111827] hover:file:bg-[#F8FAFC]">
+                                                <button type="submit" :disabled="uploadingVault"
+                                                        class="btn-tactile px-4 py-2 rounded-lg bg-[#00AA5B] hover:bg-[#00924E] text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-65">
+                                                    <svg x-show="uploadingVault" x-cloak class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity="0.25" stroke-width="3"/><path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+                                                    <span x-text="uploadingVault ? 'Mengenkripsi AES-256...' : 'Enkripsi & Simpan ke Brankas'"></span>
+                                                </button>
+                                            </div>
                                         </form>
                                     </div>
 

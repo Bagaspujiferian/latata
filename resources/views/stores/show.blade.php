@@ -168,6 +168,20 @@
                     </div>
                 </div>
 
+                {{-- Vacation Mode Subtle Amber Info Banner --}}
+                @if($store->is_on_vacation)
+                    <div class="p-3.5 rounded-xl bg-[#FFFBEB] border border-[#FDE68A] text-[#92400E] text-xs flex items-start gap-2.5">
+                        <svg class="w-4 h-4 text-[#F59E0B] shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+                        <div>
+                            <div class="font-bold text-[#92400E]">Toko Sedang Libur Sementara (Vacation Mode)</div>
+                            <p class="text-[11px] text-[#B45309] mt-0.5">
+                                {{ $store->vacation_note ?: 'Pesanan Manual Trade dijeda sementara selama toko libur.' }}
+                                <strong class="text-[#047857]">Produk Brankas Instan AES-256 &amp; Top-Up H2H tetap dapat dibeli 24 jam nonstop!</strong>
+                            </p>
+                        </div>
+                    </div>
+                @endif
+
                 {{-- 4 Store KPI Pills --}}
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-3 pt-4 border-t border-[#F1F5F9]">
                     <div class="p-3 rounded-xl bg-[#F8FAFC] border border-[#E4E8EE] flex items-center gap-3">

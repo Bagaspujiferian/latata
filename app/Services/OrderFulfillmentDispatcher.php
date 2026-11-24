@@ -5,8 +5,10 @@ namespace App\Services;
 use App\Exceptions\InsufficientVaultStockException;
 use App\Jobs\DispatchH2HOrderJob;
 use App\Models\Order;
+use App\Models\SellerProfile;
 use App\Models\User;
 use App\Support\StateTransitionGuard;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 class OrderFulfillmentDispatcher
@@ -16,6 +18,7 @@ class OrderFulfillmentDispatcher
         private readonly ChatModerationService $chatModerationService,
         private readonly NotificationService $notificationService,
         private readonly AccountWarrantyService $warrantyService,
+        private readonly SlaDeadlineCalculator $slaDeadlineCalculator = new SlaDeadlineCalculator,
     ) {}
 
     /**
@@ -184,7 +187,17 @@ class OrderFulfillmentDispatcher
         StateTransitionGuard::assertOrderTransition($orderRow->status, 'PROCESSING', "Manual Trade {$orderRow->order_code}");
 
         $slaMinutes = max(1, (int) $orderRow->sla_target_minutes_snapshot);
-        $slaDeadline = now()->addMinutes($slaMinutes);
+        $sellerProfile = SellerProfile::with('operatingHours')
+            ->where('user_id', (int) $orderRow->seller_id)
+            ->first();
+
+        $paidAt = CarbonImmutable::now();
+        $slaDeadline = $this->slaDeadlineCalculator->calculateDeadline(
+            paidAt: $paidAt,
+            slaMinutes: $slaMinutes,
+            sellerProfile: $sellerProfile,
+            operatingHours: $sellerProfile ? $sellerProfile->operatingHours : collect(),
+        );
 
         DB::table('orders')->where('id', $orderRow->id)->update([
             'status' => 'PROCESSING',

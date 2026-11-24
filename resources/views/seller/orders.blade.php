@@ -75,7 +75,24 @@
                                     </div>
                                 @endif
 
-                                @if($order->status === 'PROCESSING')
+                                @if(in_array($order->status, ['PAID_ESCROW', 'PROCESSING'], true))
+                                    @if($order->delivery_method === 'manual_trade' && $order->seller_accepted_at === null)
+                                        <form method="POST" action="{{ route('seller.orders.accept', $order->order_code) }}" class="p-3 rounded-xl bg-[#EFF6FF] border border-[#BFDBFE] flex items-center justify-between gap-2">
+                                            @csrf
+                                            <div class="text-[11px] text-[#1E3A8A]">
+                                                <strong class="block text-[#111827]">Kunci Pembatalan Sepihak</strong>
+                                                <span>Klik untuk menandai pesanan mulai dikerjakan.</span>
+                                            </div>
+                                            <button type="submit" class="btn-tactile px-3.5 py-2 rounded-lg bg-[#0068E1] hover:bg-[#0055B8] text-white text-xs font-bold shrink-0 cursor-pointer">
+                                                Mulai Proses Pesanan
+                                            </button>
+                                        </form>
+                                    @elseif($order->delivery_method === 'manual_trade' && $order->seller_accepted_at !== null)
+                                        <div class="px-3 py-2 rounded-lg bg-[#EFF6FF] border border-[#BFDBFE] text-[11px] text-[#1E40AF] font-semibold">
+                                            Sedang Diproses sejak {{ $order->seller_accepted_at->format('H:i:s') }} WIB (Pembatalan pembeli terkunci)
+                                        </div>
+                                    @endif
+
                                     <form method="POST" action="{{ route('seller.orders.deliver', $order->order_code) }}" class="p-3.5 rounded-xl bg-[#ECFDF5] border border-[#A7F3D0] space-y-2.5">
                                         @csrf
                                         <div class="text-xs font-bold text-[#065F46]">Kirim Bukti Pengiriman (Stop Timer SLA)</div>

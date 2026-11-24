@@ -8,6 +8,7 @@ use App\Exceptions\InvalidGameInputException;
 use App\Exceptions\PriceChangedException;
 use App\Exceptions\SelfDealingException;
 use App\Exceptions\StoreClosedException;
+use App\Exceptions\StoreOnVacationException;
 use App\Exceptions\TooManyUnpaidInvoicesException;
 use App\Exceptions\UnverifiedAccountPromoException;
 use App\Models\CartItem;
@@ -142,8 +143,25 @@ class CheckoutSplitOrderService
                     );
                 }
 
-                // STORE OPEN & AUTO-SCHEDULE GUARD: manual_trade blocked when closed; instant_vault & api_h2h stay 24/7.
-                if ($deliveryMethod === 'manual_trade' && $product->sellerProfile && ! $product->sellerProfile->isCurrentlyOpen()) {
+                // VACATION MODE GUARD: manual_trade blocked when store is on vacation; instant_vault & api_h2h stay 24/7.
+                if ($deliveryMethod === 'manual_trade' && $product->sellerProfile && $product->sellerProfile->is_on_vacation) {
+                    $vacationNote = trim((string) ($product->sellerProfile->vacation_note ?? ''));
+                    $noteSuffix = $vacationNote !== '' ? " ({$vacationNote})" : '';
+
+                    throw new StoreOnVacationException(
+                        "Toko {$product->sellerProfile->store_name} sedang libur sementara{$noteSuffix} untuk pesanan manual trade ({$product->title}). Produk Brankas Instan & H2H tetap tersedia 24/7."
+                    );
+                }
+
+                // STORE OPEN & AUTO-SCHEDULE GUARD: manual_trade blocked when manually closed or when auto_schedule_enabled is active without SLA-shifting operating_hours_enabled.
+                if (
+                    $deliveryMethod === 'manual_trade'
+                    && $product->sellerProfile
+                    && (
+                        ! $product->sellerProfile->is_store_open
+                        || (! $product->sellerProfile->operating_hours_enabled && ! $product->sellerProfile->isCurrentlyOpen())
+                    )
+                ) {
                     throw new StoreClosedException(
                         "Toko {$product->sellerProfile->store_name} sedang TUTUP atau di luar jam operasional untuk produk manual trade ({$product->title}). Produk Brankas Instan & H2H tetap tersedia 24/7."
                     );

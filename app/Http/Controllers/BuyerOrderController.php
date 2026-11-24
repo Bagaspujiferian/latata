@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\BuyerCancelOrderRequest;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PaymentInvoice;
@@ -9,9 +10,11 @@ use App\Models\WalletMutation;
 use App\Models\WalletTopUp;
 use App\Models\WarrantyClaim;
 use App\Services\ChatModerationService;
+use App\Services\ManualOrderCancellationService;
 use App\Services\OrderStateAndSlaService;
 use App\Services\VaultEncryptionService;
 use DomainException;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,6 +24,7 @@ class BuyerOrderController extends Controller
 {
     public function __construct(
         private readonly OrderStateAndSlaService $orderStateService,
+        private readonly ManualOrderCancellationService $manualOrderCancellationService,
         private readonly VaultEncryptionService $vaultService,
         private readonly ChatModerationService $chatModerationService,
     ) {}
@@ -113,6 +117,28 @@ class BuyerOrderController extends Controller
             $this->orderStateService->buyerClaimSlaBreachRefund($order->id, $this->requireUser($request)->id);
 
             return back()->with('success', 'Refund Pelanggaran SLA Berhasil! 100% dana pesanan telah masuk instan ke Saldo Aktif Anda.');
+        } catch (DomainException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    public function cancelUnprocessedOrder(BuyerCancelOrderRequest $request, string $orderCode): RedirectResponse
+    {
+        $order = Order::where('order_code', $orderCode)->firstOrFail();
+
+        try {
+            $cancelled = $this->manualOrderCancellationService->buyerCancelUnprocessedOrder(
+                buyerId: $this->requireUser($request)->id,
+                orderId: (int) $order->id,
+                reason: $request->resolvedReason(),
+            );
+
+            return back()->with(
+                'success',
+                "Pesanan {$cancelled->order_code} berhasil dibatalkan sebelum diproses penjual. Dana bersih Rp ".number_format($cancelled->refundableBuyerAmount(), 0, ',', '.').' telah dikembalikan ke Saldo Aktif Dompet Anda.'
+            );
+        } catch (AuthorizationException $e) {
+            abort(403, $e->getMessage());
         } catch (DomainException $e) {
             return back()->with('error', $e->getMessage());
         }

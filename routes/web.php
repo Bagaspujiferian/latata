@@ -152,6 +152,9 @@ Route::middleware(['auth'])->group(function (): void {
     Route::get('/buyer/orders/{order_code}/pdf', [ExportController::class, 'orderPdf'])->name('buyer.orders.pdf');
     Route::post('/buyer/orders/{order_code}/decrypt/{orderItem}', [BuyerOrderController::class, 'decryptVaultItem'])->name('buyer.orders.decrypt');
     Route::post('/buyer/orders/{order_code}/claim-sla-refund', [BuyerOrderController::class, 'claimSlaRefund'])->name('buyer.orders.claim-sla');
+    Route::post('/buyer/orders/{order_code}/cancel', [BuyerOrderController::class, 'cancelUnprocessedOrder'])
+        ->middleware('idempotent')
+        ->name('buyer.orders.cancel');
     Route::post('/buyer/orders/{order_code}/confirm-complete', [BuyerOrderController::class, 'confirmComplete'])->name('buyer.orders.confirm');
     Route::post('/buyer/orders/{order_code}/dispute', [BuyerOrderController::class, 'openDispute'])->name('buyer.orders.dispute');
     Route::post('/buyer/orders/{order_code}/messages', [BuyerOrderController::class, 'sendMessage'])
@@ -197,8 +200,10 @@ Route::prefix('seller')->name('seller.')->middleware(['auth', 'role:seller'])->g
     Route::post('/products/{id}/attributes', [SellerDashboardController::class, 'updateProductAttributes'])->name('products.attributes.sync');
     Route::post('/products/{id}/bump', [SellerDashboardController::class, 'bumpProduct'])->name('products.bump');
     Route::post('/products/{id}/vault', [SellerDashboardController::class, 'ingestVault'])->name('products.vault');
+    Route::post('/products/{id}/vault/bulk-import', [SellerDashboardController::class, 'ingestVault'])->name('products.vault.bulk-import');
 
     Route::get('/orders', [SellerDashboardController::class, 'orders'])->name('orders');
+    Route::post('/orders/{order_code}/accept', [SellerDashboardController::class, 'acceptManualOrder'])->name('orders.accept');
     Route::post('/orders/{order_code}/deliver', [SellerDashboardController::class, 'deliverOrder'])->name('orders.deliver');
     Route::post('/orders/{order_code}/messages', [SellerDashboardController::class, 'sendMessage'])
         ->middleware('throttle:chat-send')
