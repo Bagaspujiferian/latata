@@ -80,4 +80,13 @@ return [
         'cooldown_seconds' => (int) env('NEXATRADE_ALERT_COOLDOWN_SECONDS', 900),
         'failed_jobs_threshold' => (int) env('NEXATRADE_FAILED_JOBS_THRESHOLD', 5),
     ],
+
+    'otp_gateway' => [
+        'whatsapp_driver' => env('NEXATRADE_WHATSAPP_DRIVER', 'log'),
+        'fonnte_token' => env('NEXATRADE_FONNTE_TOKEN'),
+        'fonnte_endpoint' => env('NEXATRADE_FONNTE_ENDPOINT', 'https://api.fonnte.com/send'),
+        'resend_cooldown_seconds' => (int) env('NEXATRADE_OTP_COOLDOWN_SECONDS', 60),
+        'max_per_target_per_hour' => (int) env('NEXATRADE_OTP_MAX_PER_TARGET_HOUR', 5),
+        'max_per_ip_per_hour' => (int) env('NEXATRADE_OTP_MAX_PER_IP_HOUR', 15),
+    ],
 ];

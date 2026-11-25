@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Contracts\WhatsAppGatewayInterface;
 use App\Models\CartItem;
 use App\Models\ModerationReport;
 use App\Models\Order;
@@ -10,6 +11,8 @@ use App\Models\User;
 use App\Models\WarrantyClaim;
 use App\Models\WithdrawalRequest;
 use App\Services\ConversationService;
+use App\Services\Gateways\FonnteWhatsAppGateway;
+use App\Services\Gateways\LogWhatsAppGateway;
 use App\Services\NotificationService;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
@@ -26,7 +29,13 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        $this->app->bind(WhatsAppGatewayInterface::class, function ($app): WhatsAppGatewayInterface {
+            $driver = strtolower(trim((string) config('nexatrade.otp_gateway.whatsapp_driver', 'log')));
+
+            return $driver === 'fonnte'
+                ? $app->make(FonnteWhatsAppGateway::class)
+                : $app->make(LogWhatsAppGateway::class);
+        });
     }
 
     public function boot(): void
@@ -174,9 +183,9 @@ class AppServiceProvider extends ServiceProvider
         });
 
         RateLimiter::for('verification-otp', function (Request $request): Limit {
-            $key = $request->user()?->id ? 'u:'.$request->user()->id : 'ip:'.$request->ip();
+            $maxIpHour = max(15, (int) config('nexatrade.otp_gateway.max_per_ip_per_hour', 15));
 
-            return Limit::perMinutes(10, 3)->by($key);
+            return Limit::perHour($maxIpHour + 15)->by('otp-route:'.$request->ip());
         });
     }
 }

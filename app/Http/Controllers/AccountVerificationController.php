@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\VerificationChannel;
+use App\Exceptions\OtpRateLimitExceededException;
 use App\Http\Requests\BindPhoneRequest;
 use App\Http\Requests\IssueOtpChallengeRequest;
 use App\Http\Requests\VerifyOtpChallengeRequest;
@@ -54,7 +55,11 @@ class AccountVerificationController extends Controller
         $channel = VerificationChannel::from((string) $request->validated('channel'));
 
         try {
-            $plainOtp = $this->verificationService->issueChallenge($user, $channel);
+            $plainOtp = $this->verificationService->issueChallenge(
+                $user,
+                $channel,
+                (string) $request->ip(),
+            );
             $label = $channel === VerificationChannel::EMAIL ? 'Email' : 'Nomor Telepon';
 
             if ($request->expectsJson()) {
@@ -76,6 +81,19 @@ class AccountVerificationController extends Controller
             }
 
             return back()->with('success', $flashMsg);
+        } catch (OtpRateLimitExceededException $e) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => false,
+                    'retry_after' => $e->retryAfterSeconds,
+                    'limit_layer' => $e->limitLayer,
+                    'message' => $e->getMessage(),
+                ], 429)->header('Retry-After', (string) $e->retryAfterSeconds);
+            }
+
+            return back()
+                ->with('error', $e->getMessage())
+                ->header('Retry-After', (string) $e->retryAfterSeconds);
         } catch (DomainException $e) {
             if ($request->expectsJson()) {
                 return response()->json([

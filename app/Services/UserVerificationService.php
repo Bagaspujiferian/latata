@@ -2,14 +2,17 @@
 
 namespace App\Services;
 
+use App\Contracts\WhatsAppGatewayInterface;
 use App\Enums\VerificationChannel;
 use App\Exceptions\DuplicatePhoneNumberException;
+use App\Mail\OtpVerificationMail;
 use App\Models\User;
 use App\Models\UserVerificationChallenge;
 use DomainException;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 
 class UserVerificationService
 {
@@ -20,6 +23,7 @@ class UserVerificationService
     public function __construct(
         private readonly PhoneNormalizer $phoneNormalizer,
         private readonly NotificationService $notificationService,
+        private readonly OtpRateLimiterService $otpRateLimiter,
     ) {}
 
     /**
@@ -69,18 +73,22 @@ class UserVerificationService
     }
 
     /**
-     * Issue a new 6-digit OTP challenge (10-minute TTL, max 5 attempts) and invalidate prior unconsumed challenges.
+     * Issue a new 6-digit OTP challenge (10-minute TTL, max 5 attempts), enforce 3-layer anti-drain rate limits,
+     * deliver via WhatsApp Gateway or Transactional Email Mailable, and invalidate prior unconsumed challenges.
      */
-    public function issueChallenge(User $user, VerificationChannel $channel): string
+    public function issueChallenge(User $user, VerificationChannel $channel, ?string $ipAddress = null): string
     {
         $user->refresh();
         $target = $this->resolveChannelTarget($user, $channel);
+        $targetHash = $this->computeTargetHash($channel, $target);
+
+        // Enforce 3-layer anti-drain rate limiter BEFORE generating OTP or touching external gateways
+        $this->otpRateLimiter->ensureAllowedAndHit($channel, $targetHash, $ipAddress);
 
         $plainOtp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-        $targetHash = $this->computeTargetHash($channel, $target);
         $codeHash = $this->computeCodeHash((int) $user->id, $channel, $plainOtp);
 
-        DB::transaction(function () use ($user, $channel, $targetHash, $codeHash, $plainOtp): void {
+        DB::transaction(function () use ($user, $channel, $target, $targetHash, $codeHash, $plainOtp): void {
             UserVerificationChallenge::where('user_id', $user->id)
                 ->where('channel', $channel->value)
                 ->whereNull('consumed_at')
@@ -97,6 +105,12 @@ class UserVerificationService
                 'consumed_at' => null,
                 'created_at' => now(),
             ]);
+
+            if ($channel === VerificationChannel::PHONE) {
+                app(WhatsAppGatewayInterface::class)->sendOtp($target, $plainOtp, self::TTL_MINUTES);
+            } else {
+                Mail::to($target)->send(new OtpVerificationMail($user, $plainOtp, self::TTL_MINUTES));
+            }
 
             $userId = (int) $user->id;
             $challengeId = (int) $challenge->id;
@@ -175,6 +189,8 @@ class UserVerificationService
 
                 $remaining = max(0, (int) $challenge->max_attempts - $newAttempts);
                 if ($remaining === 0) {
+                    $this->otpRateLimiter->clearResendCooldown($expectedTargetHash);
+
                     return [
                         'ok' => false,
                         'error' => 'Kode OTP tidak sesuai. Batas percobaan (5x) telah habis dan kode OTP ini dikunci.',
