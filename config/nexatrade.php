@@ -71,4 +71,13 @@ return [
     'max_unpaid_invoices_per_buyer' => (int) env('NEXATRADE_MAX_UNPAID_INVOICES', 3),
     'auto_complete_hours' => 24,
     'sla_badge_threshold_minutes' => 10.00,
+
+    'alerts' => [
+        'driver' => env('NEXATRADE_ALERT_DRIVER', 'log'),
+        'telegram_bot_token' => env('NEXATRADE_TELEGRAM_BOT_TOKEN'),
+        'telegram_chat_id' => env('NEXATRADE_TELEGRAM_CHAT_ID'),
+        'discord_webhook_url' => env('NEXATRADE_DISCORD_WEBHOOK_URL'),
+        'cooldown_seconds' => (int) env('NEXATRADE_ALERT_COOLDOWN_SECONDS', 900),
+        'failed_jobs_threshold' => (int) env('NEXATRADE_FAILED_JOBS_THRESHOLD', 5),
+    ],
 ];

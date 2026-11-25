@@ -7,3 +7,4 @@ Schedule::command('nexatrade:settle-completed')->everyMinute();
 Schedule::command('nexatrade:reconcile-h2h --minutes=5')->everyFiveMinutes();
 Schedule::command('nexatrade:expire-boosts')->everyFifteenMinutes();
 Schedule::command('nexatrade:audit-ledger --triggered-by=scheduler')->hourly();
+Schedule::command('nexatrade:monitor-ops')->everyFiveMinutes()->withoutOverlapping();

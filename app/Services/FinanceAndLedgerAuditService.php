@@ -103,7 +103,7 @@ class FinanceAndLedgerAuditService
         $status = ($absDiscrepancyCents === 0 && empty($discrepancyDetails)) ? 'BALANCED' : 'DISCREPANCY';
         $auditCode = 'AUD-'.now()->format('YmdHis').'-'.strtoupper(Str::random(4));
 
-        return LedgerAuditSnapshot::create([
+        $snapshot = LedgerAuditSnapshot::create([
             'audit_code' => $auditCode,
             'status' => $status,
             'total_wallets_pending' => number_format($totalPendingCents / 100, 2, '.', ''),
@@ -117,6 +117,26 @@ class FinanceAndLedgerAuditService
             'triggered_by' => mb_substr($triggeredBy, 0, 60),
             'created_at' => now(),
         ]);
+
+        if ($status !== 'BALANCED') {
+            app(OpsAlertDispatcherService::class)->dispatch(
+                severity: OpsAlertDispatcherService::SEVERITY_CRITICAL,
+                title: "Ledger Discrepancy Detected ({$auditCode})",
+                message: 'Selisih rekonsiliasi buku besar terdeteksi sebesar Rp '.number_format($absDiscrepancyCents / 100, 2, ',', '.')." pada audit {$auditCode}.",
+                dedupKey: 'ledger_discrepancy',
+                context: [
+                    'audit_code' => $auditCode,
+                    'status' => $status,
+                    'total_custody_wallets' => (string) $snapshot->total_custody_wallets,
+                    'total_ledger_net' => (string) $snapshot->total_ledger_net,
+                    'discrepancy_amount' => (string) $snapshot->discrepancy_amount,
+                    'users_checked' => (int) $snapshot->users_checked,
+                    'triggered_by' => $triggeredBy,
+                ],
+            );
+        }
+
+        return $snapshot;
     }
 
     /**

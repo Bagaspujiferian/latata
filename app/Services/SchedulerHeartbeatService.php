@@ -38,6 +38,10 @@ class SchedulerHeartbeatService
             'display_name' => 'Global Double-Entry Custody Ledger Auditor',
             'expected_interval_minutes' => 60,
         ],
+        'nexatrade:monitor-ops' => [
+            'display_name' => 'Proactive Operational Health & Alert Monitor',
+            'expected_interval_minutes' => 5,
+        ],
     ];
 
     /**
