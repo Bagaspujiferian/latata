@@ -146,6 +146,7 @@ class VaultEncryptionService
         $availableCount = (int) DB::table('product_vaults')
             ->where('product_id', $productId)
             ->where('status', 'available')
+            ->lockForUpdate()
             ->count();
 
         DB::table('products')
