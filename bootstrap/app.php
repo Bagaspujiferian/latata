@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Middleware\AddSecurityHeaders;
+use App\Http\Middleware\ApplySecurityHeaders;
 use App\Http\Middleware\EnsureAdminPermission;
 use App\Http\Middleware\EnsureIdempotentRequest;
 use App\Http\Middleware\EnsureSimulationModeEnabled;
@@ -21,8 +21,9 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->trustProxies(at: '*');
 
+        $middleware->append(ApplySecurityHeaders::class);
         $middleware->appendToGroup('web', EnsureUserNotBanned::class);
-        $middleware->appendToGroup('web', AddSecurityHeaders::class);
+        $middleware->appendToGroup('web', ApplySecurityHeaders::class);
 
         $middleware->alias([
             'role' => EnsureUserRole::class,

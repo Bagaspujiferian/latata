@@ -112,9 +112,14 @@ class BuyerOrderController extends Controller
     public function claimSlaRefund(Request $request, string $orderCode): RedirectResponse
     {
         $order = Order::where('order_code', $orderCode)->firstOrFail();
+        $user = $this->requireUser($request);
+
+        if ((int) $order->buyer_id !== (int) $user->id && ! $user->isAdmin()) {
+            abort(403);
+        }
 
         try {
-            $this->orderStateService->buyerClaimSlaBreachRefund($order->id, $this->requireUser($request)->id);
+            $this->orderStateService->buyerClaimSlaBreachRefund($order->id, $user->id);
 
             return back()->with('success', 'Refund Pelanggaran SLA Berhasil! 100% dana pesanan telah masuk instan ke Saldo Aktif Anda.');
         } catch (DomainException $e) {
@@ -147,6 +152,12 @@ class BuyerOrderController extends Controller
     public function confirmComplete(Request $request, string $orderCode): RedirectResponse
     {
         $order = Order::where('order_code', $orderCode)->firstOrFail();
+        $user = $this->requireUser($request);
+
+        if ((int) $order->buyer_id !== (int) $user->id && ! $user->isAdmin()) {
+            abort(403);
+        }
+
         $validated = $request->validate([
             'rating' => ['nullable', 'integer', 'min:1', 'max:5'],
             'comment' => ['nullable', 'string', 'max:500'],
@@ -155,7 +166,7 @@ class BuyerOrderController extends Controller
         try {
             $this->orderStateService->buyerConfirmOrderCompleted(
                 orderId: $order->id,
-                buyerId: $this->requireUser($request)->id,
+                buyerId: $user->id,
                 rating: isset($validated['rating']) ? (int) $validated['rating'] : null,
                 comment: $validated['comment'] ?? null,
             );
@@ -169,6 +180,12 @@ class BuyerOrderController extends Controller
     public function openDispute(Request $request, string $orderCode): RedirectResponse
     {
         $order = Order::where('order_code', $orderCode)->firstOrFail();
+        $user = $this->requireUser($request);
+
+        if ((int) $order->buyer_id !== (int) $user->id && ! $user->isAdmin()) {
+            abort(403);
+        }
+
         $validated = $request->validate([
             'reason' => ['required', 'string', 'min:10', 'max:1000'],
             'attachment_proof_url' => ['nullable', 'string', 'max:255'],
@@ -177,7 +194,7 @@ class BuyerOrderController extends Controller
         try {
             $this->orderStateService->buyerOpenDispute(
                 orderId: $order->id,
-                buyerId: $this->requireUser($request)->id,
+                buyerId: $user->id,
                 reason: $validated['reason'],
                 proofUrl: $validated['attachment_proof_url'] ?? null,
             );

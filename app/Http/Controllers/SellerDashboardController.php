@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\UnauthorizedVaultAccessException;
 use App\Http\Requests\BulkImportVaultRequest;
 use App\Models\DebtRepayment;
 use App\Models\GameCategory;
@@ -145,6 +146,11 @@ class SellerDashboardController extends Controller
 
     public function updateProduct(Request $request, int $id): RedirectResponse
     {
+        $targetProduct = Product::findOrFail($id);
+        if ((int) $targetProduct->seller_id !== (int) $this->requireUser($request)->id) {
+            abort(403, 'Anda tidak berwenang mengubah produk milik toko lain.');
+        }
+
         $validated = $request->validate([
             'title' => ['required', 'string', 'min:5', 'max:200'],
             'price' => ['required', 'numeric', 'min:1000', 'max:50000000'],
@@ -164,6 +170,11 @@ class SellerDashboardController extends Controller
 
     public function archiveProduct(Request $request, int $id): RedirectResponse
     {
+        $targetProduct = Product::findOrFail($id);
+        if ((int) $targetProduct->seller_id !== (int) $this->requireUser($request)->id) {
+            abort(403, 'Anda tidak berwenang mengarsipkan produk milik toko lain.');
+        }
+
         try {
             $this->merchandisingService->softDeleteProduct($id, $this->requireUser($request)->id);
 
@@ -175,6 +186,11 @@ class SellerDashboardController extends Controller
 
     public function restoreProduct(Request $request, int $id): RedirectResponse
     {
+        $targetProduct = Product::withTrashed()->findOrFail($id);
+        if ((int) $targetProduct->seller_id !== (int) $this->requireUser($request)->id) {
+            abort(403, 'Anda tidak berwenang memulihkan produk milik toko lain.');
+        }
+
         try {
             $product = $this->merchandisingService->restoreProduct($id, $this->requireUser($request)->id);
 
@@ -186,8 +202,20 @@ class SellerDashboardController extends Controller
 
     public function addProductImage(Request $request, int $id): RedirectResponse
     {
+        $targetProduct = Product::findOrFail($id);
+        if ((int) $targetProduct->seller_id !== (int) $this->requireUser($request)->id) {
+            abort(403, 'Anda tidak berwenang mengubah galeri produk milik toko lain.');
+        }
+
         $validated = $request->validate([
-            'image_file' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'mimetypes:image/jpeg,image/png,image/webp', 'max:3072'],
+            'image_file' => [
+                'nullable',
+                'file',
+                'mimes:jpg,jpeg,png,webp',
+                'mimetypes:image/jpeg,image/png,image/webp',
+                'max:3072',
+                $this->imageUploadService->validationRule(3072),
+            ],
             'image_url' => ['nullable', 'string', 'max:255'],
             'alt_text' => ['nullable', 'string', 'max:150'],
             'is_primary' => ['nullable', 'boolean'],
@@ -300,7 +328,7 @@ class SellerDashboardController extends Controller
             return back()
                 ->with('vault_ingest_report', $report)
                 ->with('success', "Brankas AES-256 Diperbarui: {$bulkResult->insertedCount} kode baru terenkripsi, {$totalDuplicates} duplikat dilewati ({$bulkResult->skippedDuplicateInBatchCount} batch / {$bulkResult->skippedDuplicateInDbCount} DB), {$bulkResult->skippedEmptyCount} baris kosong. Stok tersedia kini: {$currentAvailableStock}.");
-        } catch (AuthorizationException $e) {
+        } catch (AuthorizationException|UnauthorizedVaultAccessException $e) {
             abort(403, $e->getMessage());
         } catch (DomainException $e) {
             return back()->with('error', $e->getMessage());

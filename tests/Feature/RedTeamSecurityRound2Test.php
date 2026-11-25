@@ -483,7 +483,7 @@ class RedTeamSecurityRound2Test extends TestCase
             ->assertHeader('X-Frame-Options', 'DENY')
             ->assertHeader('X-Content-Type-Options', 'nosniff')
             ->assertHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
-            ->assertHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+            ->assertHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(self)')
             ->assertHeader('Pragma', 'no-cache');
 
         $this->assertStringContainsString('no-store', strtolower((string) $resp->headers->get('Cache-Control')));
